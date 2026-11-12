@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PocaTrack — Photocard Collection & Wishlist Tracker</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Phosphor Icons CDN -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- Google Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#fdf2f8',
+              100: '#fce7f3',
+              400: '#f472b6',
+              500: '#ec4899',
+              600: '#db2777',
+              700: '#be185d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Card aspect ratio for standard photocard 55mm x 85mm ~ 1:1.54 */
+    .aspect-photocard {
+      aspect-ratio: 55 / 85;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 9999px;
+    }
+    .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen font-sans transition-colors duration-200">
+
+  <!-- Header & Navigation -->
+  <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+          <i class="ph-bold ph-cards text-xl"></i>
+        </div>
+        <div>
+          <span class="font-extrabold text-lg sm:text-xl tracking-tight bg-gradient-to-r from-brand-600 to-indigo-600 dark:from-brand-400 dark:to-indigo-400 bg-clip-text text-transparent">PocaTrack</span>
+          <span class="hidden sm:inline-block text-xs uppercase font-bold tracking-widest text-slate-600 dark:text-slate-300 ml-2 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Collector</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Add Card Button -->
+        <button id="openAddModalBtn" class="flex items-center gap-1.5 px-3.5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-medium text-sm shadow-sm transition active:scale-95">
+          <i class="ph-bold ph-plus"></i>
+          <span class="hidden xs:inline sm:inline">Add Photocard</span>
+        </button>
+
+        <!-- Backup/Tools Dropdown Button -->
+        <div class="relative">
+          <button id="toolsMenuBtn" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition" title="Data & Backup Options">
+            <i class="ph-bold ph-dots-three-vertical text-lg"></i>
+          </button>
+          <!-- Menu Dropdown -->
+          <div id="toolsMenu" class="hidden absolute right-0 mt-2 w-52 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-1.5 z-50 text-sm">
+            <button id="exportBtn" class="w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 text-slate-700 dark:text-slate-300">
+              <i class="ph ph-download-simple text-base text-brand-500"></i> Export Backup (.json)
+            </button>
+            <label class="w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 text-slate-700 dark:text-slate-300 cursor-pointer">
+              <i class="ph ph-upload-simple text-base text-indigo-500"></i> Import Backup
+              <input type="file" id="importInput" accept=".json" class="hidden">
+            </label>
+            <div class="border-t border-slate-200 dark:border-slate-800 my-1"></div>
+            <button id="resetStarterBtn" class="w-full text-left px-4 py-2 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 flex items-center gap-2.5">
+              <i class="ph ph-arrow-counter-clockwise text-base"></i> Reset to Demo Cards
+            </button>
+          </div>
+        </div>
+
+        <!-- Theme Toggle -->
+        <button id="themeToggleBtn" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition" aria-label="Toggle Theme">
+          <i id="themeIcon" class="ph-bold ph-moon text-lg"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Collection Statistics Banner -->
+    <section class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Total Tracked</p>
+          <div class="flex items-baseline gap-2 mt-1">
+            <span id="statTotal" class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">0</span>
+            <span class="text-xs text-slate-600 dark:text-slate-300">cards</span>
+          </div>
+        </div>
+
+        <div class="p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30">
+          <p class="text-xs font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Owned (Have)
+          </p>
+          <div class="flex items-baseline gap-2 mt-1">
+            <span id="statOwned" class="text-2xl sm:text-3xl font-extrabold text-emerald-700 dark:text-emerald-400">0</span>
+            <span class="text-xs text-emerald-700/80 dark:text-emerald-400/80 font-medium" id="statOwnedPct">0%</span>
+          </div>
+        </div>
+
+        <div class="p-4 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30">
+          <p class="text-xs font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-amber-500"></span> Missing / Wishlist
+          </p>
+          <div class="flex items-baseline gap-2 mt-1">
+            <span id="statMissing" class="text-2xl sm:text-3xl font-extrabold text-amber-700 dark:text-amber-400">0</span>
+            <span class="text-xs text-amber-700/80 dark:text-amber-400/80 font-medium" id="statMissingPct">0%</span>
+          </div>
+        </div>
+
+        <div class="p-4 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30">
+          <p class="text-xs font-semibold uppercase tracking-wider text-indigo-800 dark:text-indigo-300">Completion</p>
+          <div class="flex items-baseline gap-2 mt-1">
+            <span id="statProgressNumber" class="text-2xl sm:text-3xl font-extrabold text-indigo-700 dark:text-indigo-400">0%</span>
+            <span class="text-xs text-indigo-700/80 dark:text-indigo-400/80 font-medium">completed</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Completion Progress Bar -->
+      <div class="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden flex">
+        <div id="statProgressBar" class="h-full bg-gradient-to-r from-emerald-500 via-brand-500 to-indigo-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+      </div>
+    </section>
+
+    <!-- Filters, Search & View Controls -->
+    <section class="space-y-3">
+      <div class="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+        
+        <!-- Status Tabs: All, Have, Wishlist -->
+        <div class="flex bg-slate-200/80 dark:bg-slate-800/80 p-1 rounded-xl self-start sm:self-auto overflow-x-auto text-sm font-semibold max-w-full">
+          <button data-filter-status="all" class="filter-status-tab px-4 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 transition flex items-center gap-1.5 whitespace-nowrap active-tab bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-sm">
+            <span>All Cards</span>
+            <span id="tabCountAll" class="text-xs px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 rounded-full">0</span>
+          </button>
+          <button data-filter-status="have" class="filter-status-tab px-4 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition flex items-center gap-1.5 whitespace-nowrap">
+            <span>Owned</span>
+            <span id="tabCountHave" class="text-xs px-1.5 py-0.2 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 rounded-full">0</span>
+          </button>
+          <button data-filter-status="missing" class="filter-status-tab px-4 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition flex items-center gap-1.5 whitespace-nowrap">
+            <span>Missing / Wishlist</span>
+            <span id="tabCountMissing" class="text-xs px-1.5 py-0.2 bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 rounded-full">0</span>
+          </button>
+        </div>
+
+        <!-- Search Bar and Sorting -->
+        <div class="flex flex-1 max-w-2xl gap-2 items-center">
+          <div class="relative flex-1">
+            <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-300 text-lg"></i>
+            <input type="text" id="searchInput" placeholder="Search idol, group, album, era, or version..." class="w-full pl-9 pr-8 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/50 text-sm">
+            <button id="clearSearchBtn" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100">
+              <i class="ph-bold ph-x-circle"></i>
+            </button>
+          </div>
+
+          <select id="sortSelect" class="py-2 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 cursor-pointer">
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="member">Idol / Member (A-Z)</option>
+            <option value="group">Group / Artist (A-Z)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Quick Group Chips Filter -->
+      <div class="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar text-xs font-medium" id="groupChipsContainer">
+        <!-- Generated dynamically -->
+      </div>
+    </section>
+
+    <!-- Cards Grid -->
+    <section>
+      <div id="cardsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="hidden py-16 text-center max-w-sm mx-auto">
+        <div class="w-16 h-16 rounded-2xl bg-brand-50 dark:bg-brand-950/40 text-brand-500 flex items-center justify-center text-3xl mx-auto mb-4 border border-brand-200/50 dark:border-brand-800/40">
+          <i class="ph ph-magnifying-glass"></i>
+        </div>
+        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1">No photocards found</h3>
+        <p class="text-sm text-slate-600 dark:text-slate-300 mb-5">Try tweaking your search filters or click below to add a new card to your collection.</p>
+        <button id="emptyStateAddBtn" class="px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-semibold hover:bg-brand-500 transition shadow-sm">
+          + Add First Photocard
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Add / Edit Modal -->
+  <div id="cardModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden transform scale-95 transition-transform duration-200" id="cardModalDialog">
+      
+      <!-- Modal Header -->
+      <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <h3 id="modalTitle" class="font-bold text-lg text-slate-900 dark:text-white">Add Photocard</h3>
+        <button id="closeModalBtn" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition">
+          <i class="ph-bold ph-x text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <form id="cardForm" class="p-5 space-y-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
+        <input type="hidden" id="editCardId" value="">
+
+        <!-- Image Upload & Preview Section -->
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Card Photo</label>
+          <div class="flex items-start gap-4">
+            <!-- Preview Box -->
+            <div id="imagePreviewBox" class="w-24 aspect-photocard rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 overflow-hidden bg-slate-100 dark:bg-slate-800 flex flex-col items-center justify-center relative group flex-shrink-0">
+              <img id="previewImg" src="" alt="Preview" class="w-full h-full object-cover hidden">
+              <div id="previewPlaceholder" class="text-center p-2 text-slate-600 dark:text-slate-300">
+                <i class="ph ph-image text-2xl"></i>
+                <span class="block text-[10px] mt-1 font-medium">No Image</span>
+              </div>
+            </div>
+
+            <!-- Upload Controls -->
+            <div class="flex-1 space-y-2">
+              <label class="inline-flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold cursor-pointer transition">
+                <i class="ph-bold ph-upload-simple"></i> Upload from Device
+                <input type="file" id="imageFileInput" accept="image/*" class="hidden">
+              </label>
+              
+              <div class="relative">
+                <input type="url" id="imageUrlInput" placeholder="Or paste image URL..." class="w-full px-3 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+              </div>
+              <p class="text-[11px] text-slate-600 dark:text-slate-300">Images uploaded locally are compressed & saved in your browser storage.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Group & Member -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">Group / Artist *</label>
+            <input type="text" id="inputGroup" required list="groupSuggestions" placeholder="e.g. ATEEZ, Big Ocean" class="w-full px-3 py-2 text-sm rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <datalist id="groupSuggestions"></datalist>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">Member / Idol *</label>
+            <input type="text" id="inputMember" required placeholder="e.g. San, Chanyeon" class="w-full px-3 py-2 text-sm rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+        </div>
+
+        <!-- Album / Era & Version -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">Album / Era</label>
+            <input type="text" id="inputAlbum" placeholder="e.g. GOLDEN HOUR : Part.1" class="w-full px-3 py-2 text-sm rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">Version / Type</label>
+            <input type="text" id="inputVersion" placeholder="e.g. POB, Makestar, Ver A" class="w-full px-3 py-2 text-sm rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+        </div>
+
+        <!-- Collection Status Radio -->
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Collection Status *</label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer transition has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50/40 dark:has-[:checked]:bg-emerald-950/20">
+              <input type="radio" name="inputStatus" value="have" checked class="text-emerald-600 focus:ring-emerald-500">
+              <div>
+                <span class="block text-sm font-semibold text-emerald-800 dark:text-emerald-300">Owned (Have)</span>
+                <span class="block text-[11px] text-slate-600 dark:text-slate-300">In my collection</span>
+              </div>
+            </label>
+            <label class="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer transition has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/40 dark:has-[:checked]:bg-amber-950/20">
+              <input type="radio" name="inputStatus" value="missing" class="text-amber-600 focus:ring-amber-500">
+              <div>
+                <span class="block text-sm font-semibold text-amber-800 dark:text-amber-300">Missing</span>
+                <span class="block text-[11px] text-slate-600 dark:text-slate-300">On my wishlist</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Optional Notes -->
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">Notes (Optional)</label>
+          <input type="text" id="inputNotes" placeholder="e.g. Priority wishlist, In transit, Trading" class="w-full px-3 py-2 text-sm rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+          <button type="button" id="cancelModalBtn" class="px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
+            Cancel
+          </button>
+          <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-500 rounded-xl shadow-md shadow-brand-500/20 transition active:scale-95">
+            Save Photocard
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-sm font-medium translate-y-16 opacity-0 transition-all duration-300 pointer-events-none">
+    <i id="toastIcon" class="ph-bold ph-check text-emerald-400"></i>
+    <span id="toastMsg">Action completed successfully</span>
+  </div>
+
+  <script>
+    // --- Initial Demo / Starter Data ---
+    const STARTER_CARDS = [
+      {
+        id: "pc_1",
+        group: "Big Ocean",
+        member: "Chanyeon",
+        album: "Follow",
+        version: "Selfie Ver A",
+        status: "have",
+        notes: "First single era",
+        imageUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+        createdAt: 1716000000000
+      },
+      {
+        id: "pc_2",
+        group: "Big Ocean",
+        member: "Jiseok",
+        album: "Follow",
+        version: "Concept Ver",
+        status: "missing",
+        notes: "Wishlist priority",
+        imageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80",
+        createdAt: 1716000100000
+      },
+      {
+        id: "pc_3",
+        group: "ATEEZ",
+        member: "San",
+        album: "GOLDEN HOUR : Part.1",
+        version: "POB Makestar Cat Ears",
+        status: "have",
+        notes: "Holographic foil",
+        imageUrl: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=600&q=80",
+        createdAt: 1716000200000
+      },
+      {
+        id: "pc_4",
+        group: "ATEEZ",
+        member: "Seonghwa",
+        album: "GOLDEN HOUR : Part.1",
+        version: "Album Ver Red",
+        status: "missing",
+        notes: "Looking to trade",
+        imageUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=600&q=80",
+        createdAt: 1716000300000
+      },
+      {
+        id: "pc_5",
+        group: "Taemin",
+        member: "Taemin",
+        album: "Guilty",
+        version: "Box Edition photocard",
+        status: "have",
+        notes: "Mint condition",
+        imageUrl: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=600&q=80",
+        createdAt: 1716000400000
+      },
+      {
+        id: "pc_6",
+        group: "8TURN",
+        member: "Myungho",
+        album: "STUNNING",
+        version: "Lucky Draw Wave 2",
+        status: "missing",
+        notes: "Grail card",
+        imageUrl: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=600&q=80",
+        createdAt: 1716000500000
+      }
+    ];
+
+    // --- State Management ---
+    const STORAGE_KEY = 'pocatrack_collection_v1';
+    let cards = [];
+    let currentFilterStatus = 'all'; // 'all' | 'have' | 'missing'
+    let currentFilterGroup = 'all';
+    let currentSearchTerm = '';
+    let currentSort = 'newest';
+
+    // Image buffer for upload modal
+    let currentImageDataUrl = '';
+
+    // --- Core Initialization ---
+    window.addEventListener('DOMContentLoaded', () => {
+      initTheme();
+      loadCollection();
+      setupEventListeners();
+      renderApp();
+    });
+
+    // Theme toggler
+    function initTheme() {
+      const isDark = localStorage.getItem('pocatrack_theme') === 'dark' || 
+        (!('pocatrack_theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        document.getElementById('themeIcon').className = 'ph-bold ph-sun text-lg text-amber-400';
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.getElementById('themeIcon').className = 'ph-bold ph-moon text-lg';
+      }
+    }
+
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('pocatrack_theme', isDark ? 'dark' : 'light');
+      document.getElementById('themeIcon').className = isDark ? 'ph-bold ph-sun text-lg text-amber-400' : 'ph-bold ph-moon text-lg';
+    }
+
+    // Load cards from LocalStorage
+    function loadCollection() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        try {
+          cards = JSON.parse(raw);
+        } catch (e) {
+          console.error("Failed to parse collection JSON, reverting to starter demo", e);
+          cards = [...STARTER_CARDS];
+          saveCollection();
+        }
+      } else {
+        cards = [...STARTER_CARDS];
+        saveCollection();
+      }
+    }
+
+    function saveCollection() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+      } catch (e) {
+        showToast("Storage quota exceeded! Try compressing or using external URLs.", "error");
+      }
+    }
+
+    // --- Setup Listeners ---
+    function setupEventListeners() {
+      // Theme
+      document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
+
+      // Search and Filter controls
+      const searchInput = document.getElementById('searchInput');
+      const clearSearchBtn = document.getElementById('clearSearchBtn');
+      searchInput.addEventListener('input', (e) => {
+        currentSearchTerm = e.target.value.trim().toLowerCase();
+        clearSearchBtn.classList.toggle('hidden', currentSearchTerm.length === 0);
+        renderCards();
+      });
+      clearSearchBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        currentSearchTerm = '';
+        clearSearchBtn.classList.add('hidden');
+        renderCards();
+      });
+
+      document.getElementById('sortSelect').addEventListener('change', (e) => {
+        currentSort = e.target.value;
+        renderCards();
+      });
+
+      // Status Tabs
+      document.querySelectorAll('.filter-status-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.filter-status-tab').forEach(t => {
+            t.classList.remove('active-tab', 'bg-white', 'dark:bg-slate-900', 'text-brand-600', 'dark:text-brand-400', 'shadow-sm');
+            t.classList.add('text-slate-600', 'dark:text-slate-400');
+          });
+          tab.classList.add('active-tab', 'bg-white', 'dark:bg-slate-900', 'text-brand-600', 'dark:text-brand-400', 'shadow-sm');
+          tab.classList.remove('text-slate-600', 'dark:text-slate-400');
+          currentFilterStatus = tab.dataset.filterStatus;
+          renderCards();
+        });
+      });
+
+      // Add Card Modal triggers
+      document.getElementById('openAddModalBtn').addEventListener('click', () => openModal());
+      document.getElementById('emptyStateAddBtn').addEventListener('click', () => openModal());
+      document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+      document.getElementById('cancelModalBtn').addEventListener('click', closeModal);
+
+      // Dismiss modal on outer click
+      document.getElementById('cardModal').addEventListener('click', (e) => {
+        if (e.target.id === 'cardModal') closeModal();
+      });
+
+      // Form submission
+      document.getElementById('cardForm').addEventListener('submit', handleFormSubmit);
+
+      // Image Upload & URL input
+      const imageFileInput = document.getElementById('imageFileInput');
+      const imageUrlInput = document.getElementById('imageUrlInput');
+
+      imageFileInput.addEventListener('change', handleImageFileUpload);
+      imageUrlInput.addEventListener('input', (e) => {
+        const url = e.target.value.trim();
+        if (url) {
+          updateImagePreview(url);
+          currentImageDataUrl = url;
+        } else {
+          updateImagePreview('');
+          currentImageDataUrl = '';
+        }
+      });
+
+      // Dropdown Tools menu toggle
+      const toolsMenuBtn = document.getElementById('toolsMenuBtn');
+      const toolsMenu = document.getElementById('toolsMenu');
+      toolsMenuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toolsMenu.classList.toggle('hidden');
+      });
+      document.addEventListener('click', () => toolsMenu.classList.add('hidden'));
+
+      // Export / Import / Reset
+      document.getElementById('exportBtn').addEventListener('click', exportCollection);
+      document.getElementById('importInput').addEventListener('change', importCollection);
+      document.getElementById('resetStarterBtn').addEventListener('click', () => {
+        if (confirmAction("Reset to demo cards? Any unsaved custom cards will be overwritten.")) {
+          cards = [...STARTER_CARDS];
+          saveCollection();
+          renderApp();
+          showToast("Reset to demo photocard collection", "info");
+        }
+      });
+    }
+
+    // Modal Image Compression and handling
+    function handleImageFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+          // Compress on client canvas to save localStorage space (max width 600px)
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Get optimized base64 jpeg
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          currentImageDataUrl = compressedDataUrl;
+          document.getElementById('imageUrlInput').value = '';
+          updateImagePreview(compressedDataUrl);
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function updateImagePreview(src) {
+      const previewImg = document.getElementById('previewImg');
+      const placeholder = document.getElementById('previewPlaceholder');
+
+      if (src) {
+        previewImg.src = src;
+        previewImg.classList.remove('hidden');
+        placeholder.classList.add('hidden');
+      } else {
+        previewImg.src = '';
+        previewImg.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+      }
+    }
+
+    // Modal Display Controls
+    function openModal(editId = null) {
+      const modal = document.getElementById('cardModal');
+      const dialog = document.getElementById('cardModalDialog');
+      const title = document.getElementById('modalTitle');
+      const form = document.getElementById('cardForm');
+
+      form.reset();
+      currentImageDataUrl = '';
+      updateImagePreview('');
+      updateGroupDatalist();
+
+      if (editId) {
+        const item = cards.find(c => c.id === editId);
+        if (item) {
+          title.textContent = 'Edit Photocard';
+          document.getElementById('editCardId').value = item.id;
+          document.getElementById('inputGroup').value = item.group;
+          document.getElementById('inputMember').value = item.member;
+          document.getElementById('inputAlbum').value = item.album || '';
+          document.getElementById('inputVersion').value = item.version || '';
+          document.getElementById('inputNotes').value = item.notes || '';
+          document.querySelector(`input[name="inputStatus"][value="${item.status}"]`).checked = true;
+
+          if (item.imageUrl) {
+            currentImageDataUrl = item.imageUrl;
+            if (item.imageUrl.startsWith('data:')) {
+              updateImagePreview(item.imageUrl);
+            } else {
+              document.getElementById('imageUrlInput').value = item.imageUrl;
+              updateImagePreview(item.imageUrl);
+            }
+          }
+        }
+      } else {
+        title.textContent = 'Add Photocard';
+        document.getElementById('editCardId').value = '';
+        document.querySelector('input[name="inputStatus"][value="have"]').checked = true;
+      }
+
+      modal.classList.remove('hidden');
+      requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        dialog.classList.remove('scale-95');
+        dialog.classList.add('scale-100');
+      });
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('cardModal');
+      const dialog = document.getElementById('cardModalDialog');
+      modal.classList.add('opacity-0');
+      dialog.classList.remove('scale-100');
+      dialog.classList.add('scale-95');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+      }, 200);
+    }
+
+    // Save Form Handler
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      const editId = document.getElementById('editCardId').value;
+      const group = document.getElementById('inputGroup').value.trim();
+      const member = document.getElementById('inputMember').value.trim();
+      const album = document.getElementById('inputAlbum').value.trim();
+      const version = document.getElementById('inputVersion').value.trim();
+      const notes = document.getElementById('inputNotes').value.trim();
+      const status = document.querySelector('input[name="inputStatus"]:checked').value;
+
+      // Default placeholder if no picture provided
+      const defaultPlaceholder = `https://placehold.co/400x600/f3f4f6/334155?text=${encodeURIComponent(member || 'Photocard')}`;
+      const imageUrl = currentImageDataUrl || defaultPlaceholder;
+
+      if (editId) {
+        // Update existing card
+        const index = cards.findIndex(c => c.id === editId);
+        if (index !== -1) {
+          cards[index] = {
+            ...cards[index],
+            group,
+            member,
+            album,
+            version,
+            notes,
+            status,
+            imageUrl
+          };
+          showToast(`Updated "${member}" card`);
+        }
+      } else {
+        // Add new card
+        const newCard = {
+          id: 'pc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          group,
+          member,
+          album,
+          version,
+          notes,
+          status,
+          imageUrl,
+          createdAt: Date.now()
+        };
+        cards.unshift(newCard);
+        showToast(`Added "${member}" (${group}) to collection`);
+      }
+
+      saveCollection();
+      renderApp();
+      closeModal();
+    }
+
+    // Toggle single photocard between 'have' and 'missing'
+    function toggleCardStatus(id) {
+      const card = cards.find(c => c.id === id);
+      if (!card) return;
+      card.status = card.status === 'have' ? 'missing' : 'have';
+      saveCollection();
+      renderApp();
+      showToast(`${card.member} set to ${card.status === 'have' ? 'Owned' : 'Missing'}`);
+    }
+
+    // Delete photocard
+    function deleteCard(id) {
+      const card = cards.find(c => c.id === id);
+      const name = card ? `${card.member} (${card.group})` : 'this card';
+      if (confirmAction(`Delete ${name} from your tracker?`)) {
+        cards = cards.filter(c => c.id !== id);
+        saveCollection();
+        renderApp();
+        showToast("Card deleted");
+      }
+    }
+
+    // --- Render Logic ---
+    function renderApp() {
+      renderStats();
+      renderGroupFilterChips();
+      renderCards();
+    }
+
+    function renderStats() {
+      const total = cards.length;
+      const haveCount = cards.filter(c => c.status === 'have').length;
+      const missingCount = cards.filter(c => c.status === 'missing').length;
+      const pct = total > 0 ? Math.round((haveCount / total) * 100) : 0;
+      const missingPct = total > 0 ? Math.round((missingCount / total) * 100) : 0;
+
+      document.getElementById('statTotal').textContent = total;
+      document.getElementById('statOwned').textContent = haveCount;
+      document.getElementById('statOwnedPct').textContent = `${pct}%`;
+      document.getElementById('statMissing').textContent = missingCount;
+      document.getElementById('statMissingPct').textContent = `${missingPct}%`;
+      document.getElementById('statProgressNumber').textContent = `${pct}%`;
+      document.getElementById('statProgressBar').style.width = `${pct}%`;
+
+      document.getElementById('tabCountAll').textContent = total;
+      document.getElementById('tabCountHave').textContent = haveCount;
+      document.getElementById('tabCountMissing').textContent = missingCount;
+    }
+
+    function renderGroupFilterChips() {
+      const container = document.getElementById('groupChipsContainer');
+      const groups = Array.from(new Set(cards.map(c => c.group).filter(Boolean))).sort();
+
+      let html = `
+        <button onclick="setGroupFilter('all')" class="px-3 py-1 rounded-full border transition whitespace-nowrap ${currentFilterGroup === 'all' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300'}">
+          All Groups (${cards.length})
+        </button>
+      `;
+
+      groups.forEach(group => {
+        const count = cards.filter(c => c.group === group).length;
+        const isSelected = currentFilterGroup.toLowerCase() === group.toLowerCase();
+        html += `
+          <button onclick="setGroupFilter('${escapeHtml(group)}')" class="px-3 py-1 rounded-full border transition whitespace-nowrap ${isSelected ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300'}">
+            ${escapeHtml(group)} <span class="opacity-70 text-[11px] font-normal">(${count})</span>
+          </button>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    window.setGroupFilter = function(groupName) {
+      currentFilterGroup = groupName;
+      renderGroupFilterChips();
+      renderCards();
+    };
+
+    function updateGroupDatalist() {
+      const list = document.getElementById('groupSuggestions');
+      const groups = Array.from(new Set(cards.map(c => c.group).filter(Boolean)));
+      list.innerHTML = groups.map(g => `<option value="${escapeHtml(g)}">`).join('');
+    }
+
+    function getFilteredCards() {
+      return cards.filter(card => {
+        // Status filter
+        if (currentFilterStatus !== 'all' && card.status !== currentFilterStatus) {
+          return false;
+        }
+        // Group filter
+        if (currentFilterGroup !== 'all' && card.group.toLowerCase() !== currentFilterGroup.toLowerCase()) {
+          return false;
+        }
+        // Search term
+        if (currentSearchTerm) {
+          const matchTarget = `${card.member} ${card.group} ${card.album || ''} ${card.version || ''} ${card.notes || ''}`.toLowerCase();
+          if (!matchTarget.includes(currentSearchTerm)) {
+            return false;
+          }
+        }
+        return true;
+      }).sort((a, b) => {
+        if (currentSort === 'newest') return (b.createdAt || 0) - (a.createdAt || 0);
+        if (currentSort === 'oldest') return (a.createdAt || 0) - (b.createdAt || 0);
+        if (currentSort === 'member') return (a.member || '').localeCompare(b.member || '');
+        if (currentSort === 'group') return (a.group || '').localeCompare(b.group || '');
+        return 0;
+      });
+    }
+
+    function renderCards() {
+      const grid = document.getElementById('cardsGrid');
+      const emptyState = document.getElementById('emptyState');
+      const filtered = getFilteredCards();
+
+      if (filtered.length === 0) {
+        grid.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      grid.innerHTML = filtered.map(card => {
+        const isHave = card.status === 'have';
+        return `
+          <div class="group relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col">
+            
+            <!-- Card Image Container -->
+            <div class="relative w-full aspect-photocard bg-slate-100 dark:bg-slate-800 overflow-hidden cursor-pointer" onclick="openModal('${card.id}')">
+              <img 
+                src="${card.imageUrl}" 
+                alt="${escapeHtml(card.member)}" 
+                class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                loading="lazy"
+                onerror="this.onerror=null; this.src='https://placehold.co/400x600/f3f4f6/334155?text=No+Photo';"
+              >
+              
+              <!-- Status Badge (Top-left) -->
+              <div class="absolute top-2 left-2 z-10">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase shadow-md backdrop-blur-md ${isHave ? 'bg-emerald-500/90 text-white' : 'bg-amber-500/90 text-white'}">
+                  <i class="ph-bold ${isHave ? 'ph-check-circle' : 'ph-heart'}"></i>
+                  ${isHave ? 'Have' : 'Wishlist'}
+                </span>
+              </div>
+
+              <!-- Top-right Quick Actions -->
+              <div class="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-10" onclick="event.stopPropagation()">
+                <button onclick="openModal('${card.id}')" class="w-7 h-7 rounded-full bg-white/90 dark:bg-slate-900/90 text-slate-700 dark:text-slate-200 flex items-center justify-center hover:bg-white dark:hover:bg-slate-900 shadow-md transition" title="Edit">
+                  <i class="ph-bold ph-pencil-simple text-xs"></i>
+                </button>
+                <button onclick="deleteCard('${card.id}')" class="w-7 h-7 rounded-full bg-white/90 dark:bg-slate-900/90 text-red-600 dark:text-red-400 flex items-center justify-center hover:bg-white dark:hover:bg-slate-900 shadow-md transition" title="Delete">
+                  <i class="ph-bold ph-trash text-xs"></i>
+                </button>
+              </div>
+
+              <!-- Type / Era Overlay Tag -->
+              ${card.version ? `
+                <div class="absolute bottom-2 left-2 right-2 z-10">
+                  <span class="inline-block max-w-full truncate px-2 py-0.5 rounded-lg text-[10px] font-medium bg-slate-900/80 text-white backdrop-blur-sm">
+                    ${escapeHtml(card.version)}
+                  </span>
+                </div>
+              ` : ''}
+            </div>
+
+            <!-- Card Metadata Details -->
+            <div class="p-3 flex-1 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between gap-1 mb-0.5">
+                  <span class="text-[11px] font-semibold tracking-wider uppercase text-brand-600 dark:text-brand-400 truncate">${escapeHtml(card.group)}</span>
+                </div>
+                <h4 class="font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-tight truncate" title="${escapeHtml(card.member)}">${escapeHtml(card.member)}</h4>
+                
+                ${card.album ? `
+                  <p class="text-[11px] text-slate-600 dark:text-slate-300 truncate mt-0.5" title="${escapeHtml(card.album)}">
+                    ${escapeHtml(card.album)}
+                  </p>
+                ` : ''}
+
+                ${card.notes ? `
+                  <p class="text-[10px] text-slate-600 dark:text-slate-300 italic truncate mt-1">
+                    "${escapeHtml(card.notes)}"
+                  </p>
+                ` : ''}
+              </div>
+
+              <!-- Toggle Have/Wishlist Quick Button -->
+              <div class="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800">
+                <button 
+                  onclick="toggleCardStatus('${card.id}')" 
+                  class="w-full py-1.5 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition active:scale-95 ${isHave 
+                    ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/50' 
+                    : 'bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:hover:bg-amber-950/70 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/50'}"
+                >
+                  <i class="ph-bold ${isHave ? 'ph-check' : 'ph-plus'}"></i>
+                  <span>${isHave ? 'Mark Wishlist' : 'Mark Owned'}</span>
+                </button>
+              </div>
+
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // --- JSON Backup / Export / Import ---
+    function exportCollection() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cards, null, 2));
+      const downloadAnchor = document.createElement('a');
+      const dateStr = new Date().toISOString().slice(0, 10);
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `pocatrack_backup_${dateStr}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast("Collection data exported!");
+    }
+
+    function importCollection(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const parsed = JSON.parse(evt.target.result);
+          if (Array.isArray(parsed)) {
+            if (confirmAction(`Import ${parsed.length} photocards? This will replace your current collection.`)) {
+              cards = parsed;
+              saveCollection();
+              renderApp();
+              showToast(`Imported ${parsed.length} photocards!`);
+            }
+          } else {
+            showToast("Invalid JSON file format.", "error");
+          }
+        } catch (err) {
+          showToast("Failed to parse backup JSON file.", "error");
+        }
+        e.target.value = ''; // Reset input
+      };
+      reader.readAsText(file);
+    }
+
+    // --- Utilities & Toast ---
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function confirmAction(message) {
+      // Custom confirmation wrapper without native prompt quirks
+      return window.confirm(message);
+    }
+
+    let toastTimer = null;
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+
+      toastMsg.textContent = message;
+
+      if (type === 'error') {
+        toastIcon.className = 'ph-bold ph-warning-circle text-red-400';
+      } else if (type === 'info') {
+        toastIcon.className = 'ph-bold ph-info text-blue-400';
+      } else {
+        toastIcon.className = 'ph-bold ph-check text-emerald-400';
+      }
+
+      toast.classList.remove('translate-y-16', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-16', 'opacity-0');
+      }, 3000);
+    }
+  </script>
+</body>
+</html>
