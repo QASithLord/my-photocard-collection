@@ -414,10 +414,10 @@
       <form id="cardForm" class="p-5 space-y-4 max-h-[82vh] overflow-y-auto custom-scrollbar">
         <input type="hidden" id="editCardId" value="">
 
-        <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Card Photo</label>
+        <div id="photoUploadSection" class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-200 mb-2">Card Photo &amp; Upload</label>
           <div class="flex items-start gap-4">
-            <div id="imagePreviewBox" class="w-20 aspect-photocard rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 overflow-hidden bg-slate-100 dark:bg-slate-800 flex flex-col items-center justify-center relative group flex-shrink-0">
+            <div id="imagePreviewBox" class="w-20 aspect-photocard rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 overflow-hidden bg-white dark:bg-slate-900 flex flex-col items-center justify-center relative group flex-shrink-0">
               <img id="previewImg" src="" alt="Preview" class="w-full h-full object-cover hidden">
               <div id="previewPlaceholder" class="text-center p-2 text-slate-600 dark:text-slate-300">
                 <i class="ph ph-image text-xl"></i>
@@ -426,15 +426,18 @@
             </div>
 
             <div class="flex-1 space-y-2">
-              <label class="inline-flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold cursor-pointer transition">
-                <i class="ph-bold ph-upload-simple"></i> Upload from Device
+              <label class="inline-flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-xl bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/50 dark:hover:bg-brand-900/60 text-brand-700 dark:text-brand-300 border border-brand-200/80 dark:border-brand-800/60 text-xs font-semibold cursor-pointer transition">
+                <i class="ph-bold ph-upload-simple"></i> Upload Photo from Device
                 <input type="file" id="imageFileInput" accept="image/*" class="hidden">
               </label>
               
               <div class="relative">
-                <input type="url" id="imageUrlInput" placeholder="Or paste image URL..." class="w-full px-3 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                <input type="url" id="imageUrlInput" placeholder="Or paste image URL..." class="w-full px-3 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
               </div>
-              <p class="text-[11px] text-slate-500 dark:text-slate-400">Compressed automatically for fast cloud sync.</p>
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-[11px] text-slate-500 dark:text-slate-400">Compressed automatically for cloud sync.</p>
+                <button type="button" id="clearPhotoBtn" class="hidden text-[11px] font-semibold text-red-600 dark:text-red-400 hover:underline">Remove Photo</button>
+              </div>
             </div>
           </div>
         </div>
@@ -487,34 +490,36 @@
         <div class="p-3.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-900/50 space-y-3">
           <div class="flex items-center justify-between gap-2">
             <span class="text-xs font-bold uppercase tracking-wider text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
-              <i class="ph-bold ph-arrows-left-right text-sm"></i> Duplicates &amp; Trading Details
+              <i class="ph-bold ph-arrows-left-right text-sm"></i> Duplicates &amp; Keep / Trade Settings
             </span>
-            <span class="text-[10px] text-purple-600 dark:text-purple-400 font-medium">Listed on Trade Tab when Dupes &ge; 1</span>
+            <span id="tradeDefaultKeepBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">Default: Keep</span>
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Extra / Duplicate Count</label>
               <input type="number" id="inputDuplicateCount" min="0" max="99" value="0" class="w-full px-3 py-1.5 text-sm rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
+              <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">0 = Keep in collection (not on Trade tab)</p>
             </div>
-            <div>
+            <div id="tradeStatusFieldWrapper" class="hidden">
               <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Trade Status</label>
               <select id="inputTradeStatus" class="w-full px-3 py-1.5 text-sm rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
                 <option value="available">Available to Trade</option>
-                <option value="reserved">Reserved / On Hold</option>
-                <option value="nfs">Not For Trade (Keep)</option>
+                <option value="reserved">Reserved / Hold</option>
               </select>
             </div>
           </div>
 
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Saved / Holding For (Person / Handle)</label>
-            <input type="text" id="inputHoldingFor" placeholder="e.g. @sarah_trades, Elaine (pending mail)" class="w-full px-3 py-1.5 text-xs sm:text-sm rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
-          </div>
+          <div id="tradeDetailsFieldsWrapper" class="hidden space-y-3 pt-1 border-t border-purple-200/60 dark:border-purple-800/40">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Saved / Holding For (Person / Handle)</label>
+              <input type="text" id="inputHoldingFor" placeholder="e.g. @sarah_trades, Elaine (pending mail)" class="w-full px-3 py-1.5 text-xs sm:text-sm rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
 
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Trading For (Card / Item Wanted)</label>
-            <input type="text" id="inputTradingFor" placeholder="e.g. Chanyeon Follow Ver A, or any Jiseok POB" class="w-full px-3 py-1.5 text-xs sm:text-sm rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Trading For (Card / Item Wanted)</label>
+              <input type="text" id="inputTradingFor" placeholder="e.g. Chanyeon Follow Ver A, or any Jiseok POB" class="w-full px-3 py-1.5 text-xs sm:text-sm rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
           </div>
         </div>
 
@@ -637,7 +642,7 @@
         version: "Concept Ver",
         status: "missing",
         duplicateCount: 0,
-        tradeStatus: "available",
+        tradeStatus: "keep",
         holdingFor: "",
         tradingFor: "",
         notes: "Wishlist priority",
@@ -1292,6 +1297,13 @@
           currentImageDataUrl = '';
         }
       });
+      document.getElementById('clearPhotoBtn').addEventListener('click', () => {
+        imageFileInput.value = '';
+        imageUrlInput.value = '';
+        currentImageDataUrl = '';
+        updateImagePreview('');
+      });
+      document.getElementById('inputDuplicateCount').addEventListener('input', syncTradeFieldsVisibility);
 
       const toolsMenuBtn = document.getElementById('toolsMenuBtn');
       const toolsMenu = document.getElementById('toolsMenu');
@@ -1397,9 +1409,7 @@
     }
 
     function formatTradeStatusLabel(status) {
-      if (status === 'reserved') return 'Reserved / On Hold';
-      if (status === 'nfs') return 'Not For Trade';
-      return 'Available to Trade';
+      return status === 'reserved' ? 'Reserved / Hold' : 'Available to Trade';
     }
 
     function openLightbox(cardId) {
@@ -1419,7 +1429,7 @@
 
       const tradeBox = document.getElementById('lightboxTradeBox');
       const dupes = Number(card.duplicateCount || 0);
-      if (dupes > 0 || card.holdingFor || card.tradingFor) {
+      if (currentFilterGroup === 'trades' && dupes > 0) {
         tradeBox.classList.remove('hidden');
         let tradeHtml = `<div class="font-bold text-purple-800 dark:text-purple-300">Duplicates: ${dupes} (${formatTradeStatusLabel(card.tradeStatus)})</div>`;
         if (card.holdingFor) {
@@ -1479,15 +1489,42 @@
     function updateImagePreview(src) {
       const previewImg = document.getElementById('previewImg');
       const placeholder = document.getElementById('previewPlaceholder');
+      const clearBtn = document.getElementById('clearPhotoBtn');
 
       if (src) {
         previewImg.src = src;
         previewImg.classList.remove('hidden');
         placeholder.classList.add('hidden');
+        if (clearBtn) clearBtn.classList.remove('hidden');
       } else {
         previewImg.src = '';
         previewImg.classList.add('hidden');
         placeholder.classList.remove('hidden');
+        if (clearBtn) clearBtn.classList.add('hidden');
+      }
+    }
+
+    function syncTradeFieldsVisibility() {
+      const dupeCount = Math.max(0, parseInt(document.getElementById('inputDuplicateCount').value, 10) || 0);
+      const showTradeControls = currentFilterGroup === 'trades' || dupeCount >= 1;
+      const statusWrapper = document.getElementById('tradeStatusFieldWrapper');
+      const detailsWrapper = document.getElementById('tradeDetailsFieldsWrapper');
+      const keepBadge = document.getElementById('tradeDefaultKeepBadge');
+
+      if (showTradeControls) {
+        statusWrapper.classList.remove('hidden');
+        detailsWrapper.classList.remove('hidden');
+        if (keepBadge) {
+          keepBadge.textContent = dupeCount >= 1 ? `Trading ${dupeCount} Extra` : 'Trade Settings';
+          keepBadge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 font-semibold';
+        }
+      } else {
+        statusWrapper.classList.add('hidden');
+        detailsWrapper.classList.add('hidden');
+        if (keepBadge) {
+          keepBadge.textContent = 'Default: Keep';
+          keepBadge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold';
+        }
       }
     }
 
@@ -1503,6 +1540,8 @@
       const form = document.getElementById('cardForm');
 
       form.reset();
+      document.getElementById('photoUploadSection').classList.remove('hidden');
+      document.getElementById('imageFileInput').value = '';
       currentImageDataUrl = '';
       updateImagePreview('');
       updateSuggestionsDatalist();
@@ -1510,7 +1549,7 @@
       if (editId) {
         const item = cards.find(c => c.id === editId);
         if (item) {
-          title.textContent = 'Edit Photocard & Trade Details';
+          title.textContent = currentFilterGroup === 'trades' ? 'Edit Photocard & Trade Details' : 'Edit Photocard';
           document.getElementById('editCardId').value = item.id;
           document.getElementById('inputGroup').value = item.group;
           document.getElementById('inputMember').value = item.member;
@@ -1519,8 +1558,9 @@
           document.getElementById('inputNotes').value = item.notes || '';
           document.querySelector(`input[name="inputStatus"][value="${item.status}"]`).checked = true;
 
-          document.getElementById('inputDuplicateCount').value = Number(item.duplicateCount || 0);
-          document.getElementById('inputTradeStatus').value = item.tradeStatus || 'available';
+          const dupes = Number(item.duplicateCount || 0);
+          document.getElementById('inputDuplicateCount').value = dupes;
+          document.getElementById('inputTradeStatus').value = (item.tradeStatus === 'reserved') ? 'reserved' : 'available';
           document.getElementById('inputHoldingFor').value = item.holdingFor || '';
           document.getElementById('inputTradingFor').value = item.tradingFor || '';
 
@@ -1550,6 +1590,8 @@
           document.getElementById('inputAlbum').value = prefill.album;
         }
       }
+
+      syncTradeFieldsVisibility();
 
       modal.classList.remove('hidden');
       requestAnimationFrame(() => {
@@ -1583,9 +1625,10 @@
       const status = document.querySelector('input[name="inputStatus"]:checked').value;
 
       const duplicateCount = Math.max(0, parseInt(document.getElementById('inputDuplicateCount').value, 10) || 0);
-      const tradeStatus = document.getElementById('inputTradeStatus').value || 'available';
-      const holdingFor = document.getElementById('inputHoldingFor').value.trim();
-      const tradingFor = document.getElementById('inputTradingFor').value.trim();
+      const selectedTradeStatus = document.getElementById('inputTradeStatus').value === 'reserved' ? 'reserved' : 'available';
+      const tradeStatus = duplicateCount > 0 ? selectedTradeStatus : 'keep';
+      const holdingFor = duplicateCount > 0 ? document.getElementById('inputHoldingFor').value.trim() : '';
+      const tradingFor = duplicateCount > 0 ? document.getElementById('inputTradingFor').value.trim() : '';
 
       const defaultPlaceholder = `https://placehold.co/400x600/f3f4f6/334155?text=${encodeURIComponent(member || 'Photocard')}`;
       const imageUrl = currentImageDataUrl || defaultPlaceholder;
@@ -1916,57 +1959,47 @@
     function createCardHTML(card) {
       const isHave = card.status === 'have';
       const dupes = Number(card.duplicateCount || 0);
-      const tStatus = card.tradeStatus || 'available';
+      const isTradesTab = currentFilterGroup === 'trades';
+      const isReserved = card.tradeStatus === 'reserved';
 
-      let tradeBadgeClass = 'bg-sky-500/95 text-white';
-      let tradeBadgeIcon = 'ph-arrows-left-right';
-      let tradeBadgeText = 'Available to Trade';
-
-      if (tStatus === 'reserved') {
-        tradeBadgeClass = 'bg-amber-500/95 text-white';
-        tradeBadgeIcon = 'ph-lock-key';
-        tradeBadgeText = 'Reserved / Hold';
-      } else if (tStatus === 'nfs') {
-        tradeBadgeClass = 'bg-slate-700/95 text-white';
-        tradeBadgeIcon = 'ph-prohibit';
-        tradeBadgeText = 'Not For Trade';
-      }
+      const tradeBadgeClass = isReserved ? 'bg-amber-500/95 text-white' : 'bg-sky-500/95 text-white';
+      const tradeBadgeIcon = isReserved ? 'ph-lock-key' : 'ph-arrows-left-right';
+      const tradeBadgeText = isReserved ? 'Reserved / Hold' : 'Available to Trade';
 
       return `
-        <div class="group relative bg-white dark:bg-slate-900 rounded-2xl border ${currentFilterGroup === 'trades' ? 'border-purple-200/90 dark:border-purple-900/60' : (isHave ? 'border-slate-200/90 dark:border-slate-800' : 'border-dashed border-amber-300 dark:border-amber-800/60')} shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col">
+        <div class="group relative bg-white dark:bg-slate-900 rounded-2xl border ${isTradesTab ? 'border-purple-200/90 dark:border-purple-900/60' : (isHave ? 'border-slate-200/90 dark:border-slate-800' : 'border-dashed border-amber-300 dark:border-amber-800/60')} shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col">
           
           <div class="relative w-full aspect-photocard bg-slate-100 dark:bg-slate-800 overflow-hidden cursor-pointer" data-open-card="${escapeAttr(card.id)}">
             <img 
               src="${escapeAttr(card.imageUrl)}" 
               alt="${escapeAttr(card.member)}" 
-              class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${!isHave && currentFilterGroup !== 'trades' ? 'opacity-85 grayscale-[30%]' : ''}"
+              class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${!isHave && !isTradesTab ? 'opacity-85 grayscale-[30%]' : ''}"
               loading="lazy"
               onerror="this.onerror=null; this.src='https://placehold.co/400x600/f3f4f6/334155?text=No+Photo';"
             >
             
             <div class="absolute top-2 left-2 z-10 flex flex-col gap-1 items-start">
-              ${currentFilterGroup === 'trades' ? `
+              ${isTradesTab ? `
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase shadow-md backdrop-blur-md ${tradeBadgeClass}">
                   <i class="ph-bold ${tradeBadgeIcon}"></i>
                   ${tradeBadgeText}
                 </span>
+                ${dupes > 0 ? `
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold tracking-wide uppercase shadow-md bg-purple-600/95 text-white backdrop-blur-md">
+                    <i class="ph-bold ph-copy"></i> +${dupes} Dupe${dupes > 1 ? 's' : ''}
+                  </span>
+                ` : ''}
               ` : `
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase shadow-md backdrop-blur-md ${isHave ? 'bg-emerald-500/90 text-white' : 'bg-amber-500/90 text-white'}">
                   <i class="ph-bold ${isHave ? 'ph-check-circle' : 'ph-heart'}"></i>
                   ${isHave ? 'Have' : 'Wishlist'}
                 </span>
               `}
-
-              ${dupes > 0 ? `
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold tracking-wide uppercase shadow-md bg-purple-600/95 text-white backdrop-blur-md">
-                  <i class="ph-bold ph-copy"></i> +${dupes} Dupe${dupes > 1 ? 's' : ''}
-                </span>
-              ` : ''}
             </div>
 
             ${!IS_PUBLIC_VIEW ? `
               <div class="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-10">
-                <button type="button" data-edit-card="${escapeAttr(card.id)}" class="w-7 h-7 rounded-full bg-white/90 dark:bg-slate-900/90 text-slate-700 dark:text-slate-200 flex items-center justify-center hover:bg-white dark:hover:bg-slate-900 shadow-md transition" title="Edit Card / Trade Info">
+                <button type="button" data-edit-card="${escapeAttr(card.id)}" class="w-7 h-7 rounded-full bg-white/90 dark:bg-slate-900/90 text-slate-700 dark:text-slate-200 flex items-center justify-center hover:bg-white dark:hover:bg-slate-900 shadow-md transition" title="Edit Photocard">
                   <i class="ph-bold ph-pencil-simple text-xs"></i>
                 </button>
                 <button type="button" data-delete-card="${escapeAttr(card.id)}" class="w-7 h-7 rounded-full bg-white/90 dark:bg-slate-900/90 text-red-600 dark:text-red-400 flex items-center justify-center hover:bg-white dark:hover:bg-slate-900 shadow-md transition" title="Delete">
@@ -1997,7 +2030,7 @@
                 </p>
               ` : ''}
 
-              ${(dupes > 0 && (card.holdingFor || card.tradingFor || currentFilterGroup === 'trades')) ? `
+              ${isTradesTab ? `
                 <div class="mt-2 p-2 rounded-xl bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200/70 dark:border-purple-900/50 space-y-1 text-[11px]">
                   ${card.holdingFor ? `
                     <div class="flex items-start gap-1 text-amber-800 dark:text-amber-300 font-semibold leading-snug">
