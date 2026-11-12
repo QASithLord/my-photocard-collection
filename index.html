@@ -8,6 +8,10 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Phosphor Icons CDN -->
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- Firebase Compat SDKs (App, Auth, Firestore) -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <!-- Google Font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -71,6 +75,40 @@
       </div>
 
       <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Cloud Sync & Auth Status Controls -->
+        <div id="authSection" class="flex items-center gap-2">
+          <!-- Setup Cloud Sync Button (shown if Firebase not configured) -->
+          <button id="openFirebaseSetupBtn" class="hidden flex items-center gap-1.5 px-3 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800/70 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 font-semibold text-xs sm:text-sm transition">
+            <i class="ph-bold ph-cloud-arrow-up text-base"></i>
+            <span class="hidden md:inline">Connect Cloud</span>
+          </button>
+
+          <!-- Google Sign-In Button (shown if configured but signed out) -->
+          <button id="googleSignInBtn" class="hidden flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs sm:text-sm shadow-sm transition active:scale-95">
+            <svg class="w-4 h-4" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"/>
+              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24Z"/>
+              <path fill="#FBBC05" d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14Z"/>
+              <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96Z"/>
+            </svg>
+            <span>Sign in</span>
+          </button>
+
+          <!-- Signed-In User Pill (shown when authenticated) -->
+          <div id="userProfilePill" class="hidden flex items-center gap-2 pl-2 pr-1.5 py-1 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60">
+            <img id="userAvatar" src="" alt="User" class="w-6 h-6 rounded-full object-cover border border-emerald-300 dark:border-emerald-700">
+            <div class="hidden md:flex flex-col text-left leading-none">
+              <span id="userNameDisplay" class="text-xs font-bold text-slate-800 dark:text-slate-100 max-w-[90px] truncate">User</span>
+              <span class="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Live Sync
+              </span>
+            </div>
+            <button id="signOutBtn" class="p-1.5 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-slate-600 dark:text-slate-300 transition" title="Sign Out">
+              <i class="ph-bold ph-sign-out text-sm"></i>
+            </button>
+          </div>
+        </div>
+
         <!-- Add Card Button -->
         <button id="openAddModalBtn" class="flex items-center gap-1.5 px-3.5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-medium text-sm shadow-sm transition active:scale-95">
           <i class="ph-bold ph-plus"></i>
@@ -79,11 +117,18 @@
 
         <!-- Backup/Tools Dropdown Button -->
         <div class="relative">
-          <button id="toolsMenuBtn" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition" title="Data & Backup Options">
+          <button id="toolsMenuBtn" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition" title="Data & Cloud Options">
             <i class="ph-bold ph-dots-three-vertical text-lg"></i>
           </button>
           <!-- Menu Dropdown -->
-          <div id="toolsMenu" class="hidden absolute right-0 mt-2 w-52 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-1.5 z-50 text-sm">
+          <div id="toolsMenu" class="hidden absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-1.5 z-50 text-sm">
+            <button id="menuFirebaseConfigBtn" class="w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 text-slate-700 dark:text-slate-300">
+              <i class="ph ph-cloud-check text-base text-indigo-500"></i> Firebase Cloud Setup
+            </button>
+            <button id="syncLocalToCloudBtn" class="hidden w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 text-emerald-700 dark:text-emerald-400 font-medium">
+              <i class="ph ph-arrows-clockwise text-base"></i> Sync Local Cards to Cloud
+            </button>
+            <div class="border-t border-slate-200 dark:border-slate-800 my-1"></div>
             <button id="exportBtn" class="w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 text-slate-700 dark:text-slate-300">
               <i class="ph ph-download-simple text-base text-brand-500"></i> Export Backup (.json)
             </button>
@@ -107,6 +152,27 @@
   </header>
 
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Cloud Sync Status / Local Migration Banner -->
+    <section id="cloudBanner" class="hidden bg-gradient-to-r from-indigo-50 via-brand-50/60 to-purple-50 dark:from-indigo-950/50 dark:via-slate-900 dark:to-brand-950/30 border border-indigo-200/80 dark:border-indigo-800/60 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div class="flex items-start sm:items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+          <i id="cloudBannerIcon" class="ph-bold ph-cloud-arrow-up text-lg"></i>
+        </div>
+        <div>
+          <h4 id="cloudBannerTitle" class="font-bold text-sm text-slate-900 dark:text-white">Sync Across Desktop & Mobile</h4>
+          <p id="cloudBannerDesc" class="text-xs text-slate-600 dark:text-slate-300 mt-0.5">Connect your free Firebase project to automatically sync photos and wishlist progress across all devices.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 self-end sm:self-auto flex-shrink-0">
+        <button id="bannerPrimaryActionBtn" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition active:scale-95">
+          Setup Firebase
+        </button>
+        <button id="dismissCloudBannerBtn" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition" title="Dismiss">
+          <i class="ph-bold ph-x text-sm"></i>
+        </button>
+      </div>
+    </section>
 
     <!-- Collection Statistics Banner -->
     <section class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm">
@@ -346,6 +412,83 @@
     </div>
   </div>
 
+  <!-- Firebase Configuration Modal -->
+  <div id="firebaseModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+    <div id="firebaseModalDialog" class="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden transform scale-95 transition-transform duration-200">
+      <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i class="ph-bold ph-cloud-check text-xl text-indigo-500"></i>
+          <h3 class="font-bold text-lg text-slate-900 dark:text-white">Firebase Cloud Sync Setup</h3>
+        </div>
+        <button id="closeFirebaseModalBtn" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition">
+          <i class="ph-bold ph-x text-lg"></i>
+        </button>
+      </div>
+
+      <div class="p-5 space-y-4 max-h-[82vh] overflow-y-auto custom-scrollbar text-sm">
+        <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-700 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+          <p class="font-bold text-slate-800 dark:text-slate-100">Quick Free Setup (Firebase Spark Plan):</p>
+          <ol class="list-decimal list-inside space-y-1">
+            <li>Go to <a href="https://console.firebase.google.com/" target="_blank" class="text-indigo-600 dark:text-indigo-400 underline font-medium">Firebase Console</a> & create a free project.</li>
+            <li>Enable <strong>Authentication → Google</strong> sign-in provider, and add <code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700">qasithlord.github.io</code> under <em>Settings → Authorized domains</em>.</li>
+            <li>Create a <strong>Firestore Database</strong> (start in production mode) and set rules so only you can access your data.</li>
+            <li>In <em>Project Settings → Your Apps → Web (&lt;/&gt;)</em>, copy your <code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700">firebaseConfig</code> object and paste it below.</li>
+          </ol>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+            Paste <code class="lowercase">firebaseConfig</code> (JSON or JS Object)
+          </label>
+          <textarea id="firebaseConfigInput" rows="7" placeholder='{
+  apiKey: "AIzaSy...",
+  authDomain: "your-app.firebaseapp.com",
+  projectId: "your-app",
+  storageBucket: "your-app.firebasestorage.app",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef"
+}' class="w-full p-3 text-xs font-mono rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+            Saved in this browser's localStorage. You can also paste it permanently into <code class="font-mono">HARDCODED_FIREBASE_CONFIG</code> at the top of <code class="font-mono">index.html</code> so every device connects automatically!
+          </p>
+        </div>
+
+        <div class="pt-2 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800">
+          <button type="button" id="clearFirebaseConfigBtn" class="px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition">
+            Disconnect / Clear Config
+          </button>
+          <div class="flex items-center gap-2">
+            <button type="button" id="cancelFirebaseModalBtn" class="px-4 py-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
+              Cancel
+            </button>
+            <button type="button" id="saveFirebaseConfigBtn" class="px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-md transition active:scale-95">
+              Save & Connect
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Confirmation Modal (Replaces native window.confirm) -->
+  <div id="confirmModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+          <i class="ph-bold ph-warning text-xl"></i>
+        </div>
+        <div>
+          <h4 class="font-bold text-base text-slate-900 dark:text-white">Confirm Action</h4>
+          <p id="confirmModalMsg" class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1">Are you sure?</p>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button id="confirmCancelBtn" class="px-4 py-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">Cancel</button>
+        <button id="confirmOkBtn" class="px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-brand-600 hover:bg-brand-500 rounded-xl shadow-sm transition">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Notification Toast -->
   <div id="toast" class="fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-sm font-medium translate-y-16 opacity-0 transition-all duration-300 pointer-events-none">
     <i id="toastIcon" class="ph-bold ph-check text-emerald-400"></i>
@@ -353,6 +496,22 @@
   </div>
 
   <script>
+    // =========================================================================
+    // OPTIONAL: Paste your Firebase Config object below so any device (desktop
+    // or mobile) connects automatically without needing to paste it in the UI!
+    // =========================================================================
+    const HARDCODED_FIREBASE_CONFIG = null;
+    /* Example:
+    const HARDCODED_FIREBASE_CONFIG = {
+      apiKey: "AIzaSy...",
+      authDomain: "my-photocards.firebaseapp.com",
+      projectId: "my-photocards",
+      storageBucket: "my-photocards.firebasestorage.app",
+      messagingSenderId: "1234567890",
+      appId: "1:1234567890:web:abcdef123456"
+    };
+    */
+
     // --- Initial Demo / Starter Data ---
     const STARTER_CARDS = [
       {
@@ -425,12 +584,22 @@
 
     // --- State Management ---
     const STORAGE_KEY = 'pocatrack_collection_v1';
+    const FIREBASE_CONFIG_KEY = 'pocatrack_firebase_config_v1';
     let cards = [];
+    let localBackupCards = []; // Holds local IndexedDB cards when signed into cloud
     let currentFilterStatus = 'all'; // 'all' | 'have' | 'missing'
     let currentFilterGroup = 'all';
     let currentSearchTerm = '';
     let currentSort = 'newest';
     let currentViewMode = 'eras'; // 'eras' | 'grid'
+
+    // Firebase Runtime State
+    let fbApp = null;
+    let fbAuth = null;
+    let fbDb = null;
+    let currentUser = null;
+    let unsubscribeFirestore = null;
+    let bannerDismissed = false;
 
     // Image buffer for upload modal
     let currentImageDataUrl = '';
@@ -480,12 +649,14 @@
               } else {
                 cards = [...STARTER_CARDS];
               }
-              saveCollection();
+              saveLocalCollection(cards);
             }
+            localBackupCards = [...cards];
             resolve();
           };
           getAll.onerror = () => {
             cards = [...STARTER_CARDS];
+            localBackupCards = [...cards];
             resolve();
           };
         });
@@ -496,12 +667,13 @@
         } else {
           cards = [...STARTER_CARDS];
         }
+        localBackupCards = [...cards];
       }
     }
 
-    async function saveCollection() {
+    async function saveLocalCollection(targetCards = cards) {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(targetCards));
       } catch (err) {
         console.warn("LocalStorage full, prioritizing IndexedDB.");
       }
@@ -511,7 +683,245 @@
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
         store.clear();
-        cards.forEach(card => store.put(card));
+        targetCards.forEach(card => store.put(card));
+      }
+    }
+
+    // --- Firebase Initialization & Cloud Sync Logic ---
+    function getSavedFirebaseConfig() {
+      if (HARDCODED_FIREBASE_CONFIG && HARDCODED_FIREBASE_CONFIG.apiKey) {
+        return HARDCODED_FIREBASE_CONFIG;
+      }
+      const raw = localStorage.getItem(FIREBASE_CONFIG_KEY);
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && parsed.apiKey && parsed.projectId ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function parseFirebaseConfigString(inputStr) {
+      let cleaned = inputStr.trim();
+      // Strip optional "const firebaseConfig = " or trailing ";"
+      cleaned = cleaned.replace(/^(const|let|var)\s+\w+\s*=\s*/, '').replace(/;$/, '').trim();
+      try {
+        return JSON.parse(cleaned);
+      } catch {
+        // Convert unquoted JS object keys (e.g. apiKey: "...") to valid JSON
+        const jsonified = cleaned
+          .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
+          .replace(/'/g, '"')
+          .replace(/,\s*}/g, '}');
+        return JSON.parse(jsonified);
+      }
+    }
+
+    function initFirebase() {
+      const config = getSavedFirebaseConfig();
+      if (!config) {
+        updateAuthUI();
+        return false;
+      }
+
+      try {
+        if (!firebase.apps.length) {
+          fbApp = firebase.initializeApp(config);
+        } else {
+          fbApp = firebase.app();
+        }
+        fbAuth = firebase.auth();
+        fbDb = firebase.firestore();
+
+        fbAuth.onAuthStateChanged((user) => {
+          currentUser = user;
+          updateAuthUI();
+          if (user) {
+            subscribeToUserCloudCards(user.uid);
+          } else {
+            if (unsubscribeFirestore) {
+              unsubscribeFirestore();
+              unsubscribeFirestore = null;
+            }
+            loadCollection().then(() => renderApp());
+          }
+        });
+        return true;
+      } catch (err) {
+        console.error("Firebase init error:", err);
+        showToast("Invalid Firebase configuration. Check settings.", "error");
+        return false;
+      }
+    }
+
+    function subscribeToUserCloudCards(uid) {
+      if (unsubscribeFirestore) unsubscribeFirestore();
+
+      const colRef = fbDb.collection('users').doc(uid).collection('cards');
+      unsubscribeFirestore = colRef.onSnapshot((snapshot) => {
+        const cloudCards = [];
+        snapshot.forEach((doc) => {
+          cloudCards.push({ id: doc.id, ...doc.data() });
+        });
+
+        cards = cloudCards;
+        // Cache latest cloud copy locally for offline viewing
+        saveLocalCollection(cards);
+        renderApp();
+        updateAuthUI();
+      }, (error) => {
+        console.error("Firestore sync error:", error);
+        showToast("Cloud sync error: " + error.message, "error");
+      });
+    }
+
+    async function saveCardToFirestore(card) {
+      if (!fbDb || !currentUser) return;
+      const docRef = fbDb.collection('users').doc(currentUser.uid).collection('cards').doc(card.id);
+      await docRef.set(card, { merge: true });
+    }
+
+    async function deleteCardFromFirestore(cardId) {
+      if (!fbDb || !currentUser) return;
+      await fbDb.collection('users').doc(currentUser.uid).collection('cards').doc(cardId).delete();
+    }
+
+    async function syncLocalCardsToCloud() {
+      if (!fbDb || !currentUser) {
+        showToast("Please sign in with Google first", "error");
+        return;
+      }
+
+      // Filter out default starter demo cards if user has real cards, or sync all localBackupCards
+      const toUpload = localBackupCards.filter(c => !c.id.startsWith('pc_1') && !c.id.startsWith('pc_2') && !c.id.startsWith('pc_3') && !c.id.startsWith('pc_4') && !c.id.startsWith('pc_5') && !c.id.startsWith('pc_6'));
+      const sourceList = toUpload.length > 0 ? toUpload : localBackupCards;
+
+      if (sourceList.length === 0) {
+        showToast("No local cards found to upload.", "info");
+        return;
+      }
+
+      const confirmed = await confirmAction(`Upload ${sourceList.length} local photocard(s) from this device to your Google Cloud account?`);
+      if (!confirmed) return;
+
+      try {
+        showToast(`Syncing ${sourceList.length} cards to cloud...`, "info");
+        // Firestore batch supports up to 500 writes per batch
+        const chunkSize = 400;
+        for (let i = 0; i < sourceList.length; i += chunkSize) {
+          const batch = fbDb.batch();
+          const chunk = sourceList.slice(i, i + chunkSize);
+          chunk.forEach(card => {
+            const ref = fbDb.collection('users').doc(currentUser.uid).collection('cards').doc(card.id);
+            batch.set(ref, card, { merge: true });
+          });
+          await batch.commit();
+        }
+        bannerDismissed = true;
+        updateAuthUI();
+        showToast(`Successfully synced ${sourceList.length} cards to cloud!`);
+      } catch (err) {
+        console.error("Batch sync error:", err);
+        showToast("Sync failed: " + err.message, "error");
+      }
+    }
+
+    function updateAuthUI() {
+      const config = getSavedFirebaseConfig();
+      const setupBtn = document.getElementById('openFirebaseSetupBtn');
+      const signInBtn = document.getElementById('googleSignInBtn');
+      const userPill = document.getElementById('userProfilePill');
+      const syncLocalMenuBtn = document.getElementById('syncLocalToCloudBtn');
+      const banner = document.getElementById('cloudBanner');
+
+      if (!config) {
+        setupBtn.classList.remove('hidden');
+        signInBtn.classList.add('hidden');
+        userPill.classList.add('hidden');
+        syncLocalMenuBtn.classList.add('hidden');
+
+        if (!bannerDismissed) {
+          banner.classList.remove('hidden');
+          document.getElementById('cloudBannerTitle').textContent = "Sync Across Desktop & Mobile";
+          document.getElementById('cloudBannerDesc').textContent = "Connect a free Firebase project to automatically sync photos and wishlist progress across all your devices.";
+          document.getElementById('bannerPrimaryActionBtn').textContent = "Setup Firebase";
+          document.getElementById('bannerPrimaryActionBtn').onclick = () => openFirebaseModal();
+        } else {
+          banner.classList.add('hidden');
+        }
+        return;
+      }
+
+      setupBtn.classList.add('hidden');
+
+      if (!currentUser) {
+        signInBtn.classList.remove('hidden');
+        userPill.classList.add('hidden');
+        syncLocalMenuBtn.classList.add('hidden');
+
+        if (!bannerDismissed) {
+          banner.classList.remove('hidden');
+          document.getElementById('cloudBannerTitle').textContent = "Cloud Sync Ready — Sign In";
+          document.getElementById('cloudBannerDesc').textContent = "Sign in with Google to sync your photocard collection in real-time between desktop and mobile.";
+          document.getElementById('bannerPrimaryActionBtn').textContent = "Sign in with Google";
+          document.getElementById('bannerPrimaryActionBtn').onclick = signInWithGoogle;
+        } else {
+          banner.classList.add('hidden');
+        }
+      } else {
+        signInBtn.classList.add('hidden');
+        userPill.classList.remove('hidden');
+        syncLocalMenuBtn.classList.remove('hidden');
+
+        document.getElementById('userNameDisplay').textContent = currentUser.displayName || currentUser.email || 'Collector';
+        document.getElementById('userAvatar').src = currentUser.photoURL || `https://placehold.co/64x64/ec4899/ffffff?text=${encodeURIComponent((currentUser.displayName || 'U')[0])}`;
+
+        // Offer one-click migration if user has local cards that aren't in the cloud yet
+        const hasLocalCardsNotInCloud = localBackupCards.some(localCard => 
+          !localCard.id.startsWith('pc_1') && 
+          !localCard.id.startsWith('pc_2') && 
+          !localCard.id.startsWith('pc_3') && 
+          !localCard.id.startsWith('pc_4') && 
+          !localCard.id.startsWith('pc_5') && 
+          !localCard.id.startsWith('pc_6') &&
+          !cards.some(cloudCard => cloudCard.id === localCard.id)
+        );
+
+        if (hasLocalCardsNotInCloud && !bannerDismissed) {
+          banner.classList.remove('hidden');
+          document.getElementById('cloudBannerTitle').textContent = "Local Desktop Cards Found!";
+          document.getElementById('cloudBannerDesc').textContent = "Upload your existing device photocards to your Google Cloud account so they appear on your phone too.";
+          document.getElementById('bannerPrimaryActionBtn').textContent = "Sync Local Cards to Cloud";
+          document.getElementById('bannerPrimaryActionBtn').onclick = syncLocalCardsToCloud;
+        } else {
+          banner.classList.add('hidden');
+        }
+      }
+    }
+
+    async function signInWithGoogle() {
+      if (!fbAuth) {
+        openFirebaseModal();
+        return;
+      }
+      try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        await fbAuth.signInWithPopup(provider);
+        showToast("Signed in with Google!");
+      } catch (err) {
+        console.error("Google sign-in error:", err);
+        showToast("Sign-in failed: " + err.message, "error");
+      }
+    }
+
+    async function signOutUser() {
+      if (!fbAuth) return;
+      try {
+        await fbAuth.signOut();
+        showToast("Signed out — viewing local storage", "info");
+      } catch (err) {
+        showToast("Error signing out", "error");
       }
     }
 
@@ -520,6 +930,7 @@
       initTheme();
       await loadCollection();
       setupEventListeners();
+      initFirebase();
       renderApp();
     });
 
@@ -641,17 +1052,101 @@
       // Export / Import / Reset
       document.getElementById('exportBtn').addEventListener('click', exportCollection);
       document.getElementById('importInput').addEventListener('change', importCollection);
-      document.getElementById('resetStarterBtn').addEventListener('click', () => {
-        if (confirmAction("Reset to demo cards? Any unsaved custom cards will be overwritten.")) {
+      document.getElementById('resetStarterBtn').addEventListener('click', async () => {
+        const confirmed = await confirmAction("Reset to demo cards? Any unsaved custom cards will be overwritten.");
+        if (confirmed) {
           cards = [...STARTER_CARDS];
-          saveCollection();
+          await saveLocalCollection(cards);
+          if (currentUser && fbDb) {
+            for (const c of cards) {
+              await saveCardToFirestore(c);
+            }
+          }
           renderApp();
           showToast("Reset to demo photocard collection", "info");
         }
       });
+
+      // Firebase Auth & Config Modal Listeners
+      document.getElementById('openFirebaseSetupBtn').addEventListener('click', openFirebaseModal);
+      document.getElementById('menuFirebaseConfigBtn').addEventListener('click', openFirebaseModal);
+      document.getElementById('closeFirebaseModalBtn').addEventListener('click', closeFirebaseModal);
+      document.getElementById('cancelFirebaseModalBtn').addEventListener('click', closeFirebaseModal);
+      document.getElementById('firebaseModal').addEventListener('click', (e) => {
+        if (e.target.id === 'firebaseModal') closeFirebaseModal();
+      });
+
+      document.getElementById('googleSignInBtn').addEventListener('click', signInWithGoogle);
+      document.getElementById('signOutBtn').addEventListener('click', signOutUser);
+      document.getElementById('syncLocalToCloudBtn').addEventListener('click', syncLocalCardsToCloud);
+      document.getElementById('dismissCloudBannerBtn').addEventListener('click', () => {
+        bannerDismissed = true;
+        document.getElementById('cloudBanner').classList.add('hidden');
+      });
+
+      document.getElementById('saveFirebaseConfigBtn').addEventListener('click', () => {
+        const rawInput = document.getElementById('firebaseConfigInput').value;
+        if (!rawInput.trim()) {
+          showToast("Please paste your firebaseConfig object.", "error");
+          return;
+        }
+        try {
+          const parsed = parseFirebaseConfigString(rawInput);
+          if (!parsed.apiKey || !parsed.projectId) {
+            throw new Error("Missing apiKey or projectId");
+          }
+          localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(parsed));
+          closeFirebaseModal();
+          bannerDismissed = false;
+          if (initFirebase()) {
+            showToast("Firebase config saved! Click Sign in with Google.");
+          }
+        } catch (err) {
+          showToast("Could not parse config: " + err.message, "error");
+        }
+      });
+
+      document.getElementById('clearFirebaseConfigBtn').addEventListener('click', async () => {
+        const confirmed = await confirmAction("Remove saved Firebase configuration from this browser?");
+        if (!confirmed) return;
+        localStorage.removeItem(FIREBASE_CONFIG_KEY);
+        if (fbAuth && currentUser) {
+          await fbAuth.signOut();
+        }
+        currentUser = null;
+        closeFirebaseModal();
+        updateAuthUI();
+        showToast("Disconnected Firebase config", "info");
+      });
     }
 
-    // Modal Image Compression and handling
+    function openFirebaseModal() {
+      const modal = document.getElementById('firebaseModal');
+      const dialog = document.getElementById('firebaseModalDialog');
+      const textarea = document.getElementById('firebaseConfigInput');
+      const existing = getSavedFirebaseConfig();
+      textarea.value = existing ? JSON.stringify(existing, null, 2) : '';
+
+      modal.classList.remove('hidden');
+      requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        dialog.classList.remove('scale-95');
+        dialog.classList.add('scale-100');
+      });
+    }
+
+    function closeFirebaseModal() {
+      const modal = document.getElementById('firebaseModal');
+      const dialog = document.getElementById('firebaseModalDialog');
+      modal.classList.add('opacity-0');
+      dialog.classList.remove('scale-100');
+      dialog.classList.add('scale-95');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+      }, 200);
+    }
+
+    // Modal Image Compression and handling (Optimized for Firestore < 1MB doc limit)
     function handleImageFileUpload(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -675,7 +1170,8 @@
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
 
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          // Compress to JPEG 0.8 quality (~60KB-150KB) to fit well within Firestore's 1MB limit
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
           currentImageDataUrl = compressedDataUrl;
           document.getElementById('imageUrlInput').value = '';
           updateImagePreview(compressedDataUrl);
@@ -765,7 +1261,7 @@
     }
 
     // Save Form Handler
-    function handleFormSubmit(e) {
+    async function handleFormSubmit(e) {
       e.preventDefault();
       const editId = document.getElementById('editCardId').value;
       const group = document.getElementById('inputGroup').value.trim();
@@ -778,10 +1274,12 @@
       const defaultPlaceholder = `https://placehold.co/400x600/f3f4f6/334155?text=${encodeURIComponent(member || 'Photocard')}`;
       const imageUrl = currentImageDataUrl || defaultPlaceholder;
 
+      let savedCard = null;
+
       if (editId) {
         const index = cards.findIndex(c => c.id === editId);
         if (index !== -1) {
-          cards[index] = {
+          savedCard = {
             ...cards[index],
             group,
             member,
@@ -791,10 +1289,11 @@
             status,
             imageUrl
           };
+          cards[index] = savedCard;
           showToast(`Updated "${member}" card`);
         }
       } else {
-        const newCard = {
+        savedCard = {
           id: 'pc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
           group,
           member,
@@ -805,30 +1304,52 @@
           imageUrl,
           createdAt: Date.now()
         };
-        cards.unshift(newCard);
+        cards.unshift(savedCard);
         showToast(`Added "${member}" (${album})`);
       }
 
-      saveCollection();
+      await saveLocalCollection(cards);
+      if (savedCard && currentUser && fbDb) {
+        try {
+          await saveCardToFirestore(savedCard);
+        } catch (err) {
+          showToast("Saved locally, cloud sync failed: " + err.message, "error");
+        }
+      }
       renderApp();
       closeModal();
     }
 
-    function toggleCardStatus(id) {
+    async function toggleCardStatus(id) {
       const card = cards.find(c => c.id === id);
       if (!card) return;
       card.status = card.status === 'have' ? 'missing' : 'have';
-      saveCollection();
+      await saveLocalCollection(cards);
+      if (currentUser && fbDb) {
+        try {
+          await saveCardToFirestore(card);
+        } catch (err) {
+          showToast("Cloud sync error: " + err.message, "error");
+        }
+      }
       renderApp();
       showToast(`${card.member} set to ${card.status === 'have' ? 'Owned' : 'Missing'}`);
     }
 
-    function deleteCard(id) {
+    async function deleteCard(id) {
       const card = cards.find(c => c.id === id);
       const name = card ? `${card.member} (${card.group})` : 'this card';
-      if (confirmAction(`Delete ${name} from your tracker?`)) {
+      const confirmed = await confirmAction(`Delete ${name} from your tracker?`);
+      if (confirmed) {
         cards = cards.filter(c => c.id !== id);
-        saveCollection();
+        await saveLocalCollection(cards);
+        if (currentUser && fbDb) {
+          try {
+            await deleteCardFromFirestore(id);
+          } catch (err) {
+            showToast("Cloud delete error: " + err.message, "error");
+          }
+        }
         renderApp();
         showToast("Card deleted");
       }
@@ -1147,12 +1668,77 @@
         try {
           const parsed = JSON.parse(evt.target.result);
           if (Array.isArray(parsed)) {
-            if (confirmAction(`Import ${parsed.length} photocards? This will replace your current collection.`)) {
+            const confirmed = await confirmAction(`Import ${parsed.length} photocards? This will merge/update your collection.`);
+            if (confirmed) {
               cards = parsed;
-              await saveCollection();
+              await saveLocalCollection(cards);
+
+              if (currentUser && fbDb) {
+                showToast(`Uploading ${parsed.length} cards to cloud...`, "info");
+                const chunkSize = 400;
+                for (let i = 0; i < parsed.length; i += chunkSize) {
+                  const batch = fbDb.batch();
+                  const chunk = parsed.slice(i, i + chunkSize);
+                  chunk.forEach(card => {
+                    const cardId = card.id || ('pc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4));
+                    const ref = fbDb.collection('users').doc(currentUser.uid).collection('cards').doc(cardId);
+                    batch.set(ref, { ...card, id: cardId }, { merge: true });
+                  });
+                  await batch.commit();
+                }
+              }
+
               renderApp();
               showToast(`Imported ${parsed.length} photocards!`);
             }
+          } else {
+            showToast("Invalid JSON file format.", "error");
+          }
+        } catch (err) {
+          showToast("Failed to parse backup JSON file.", "error");
+        }
+        e.target.value = '';
+      };
+      reader.readAsText(file);
+    }
+
+    // --- Utilities & Toast ---
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function confirmAction(message) {
+      return new Promise((resolve) => {
+        const modal = document.getElementById('confirmModal');
+        const msgEl = document.getElementById('confirmModalMsg');
+        const okBtn = document.getElementById('confirmOkBtn');
+        const cancelBtn = document.getElementById('confirmCancelBtn');
+
+        msgEl.textContent = message;
+        modal.classList.remove('hidden');
+        requestAnimationFrame(() => modal.classList.remove('opacity-0'));
+
+        const cleanup = (result) => {
+          modal.classList.add('opacity-0');
+          setTimeout(() => modal.classList.add('hidden'), 200);
+          okBtn.removeEventListener('click', onOk);
+          cancelBtn.removeEventListener('click', onCancel);
+          resolve(result);
+        };
+
+        const onOk = () => cleanup(true);
+        const onCancel = () => cleanup(false);
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+      });
+    }
           } else {
             showToast("Invalid JSON file format.", "error");
           }
