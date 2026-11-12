@@ -174,13 +174,25 @@
           </button>
         </div>
 
-        <!-- Search Bar and Sorting -->
-        <div class="flex flex-1 max-w-2xl gap-2 items-center">
-          <div class="relative flex-1">
+        <!-- Search Bar, View Mode and Sorting -->
+        <div class="flex flex-1 max-w-2xl gap-2 items-center flex-wrap sm:flex-nowrap">
+          <div class="relative flex-1 min-w-[180px]">
             <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-300 text-lg"></i>
             <input type="text" id="searchInput" placeholder="Search idol, group, album, era, or version..." class="w-full pl-9 pr-8 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/50 text-sm">
             <button id="clearSearchBtn" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100">
               <i class="ph-bold ph-x-circle"></i>
+            </button>
+          </div>
+
+          <!-- View Mode: Era Rows vs Flat Grid -->
+          <div class="flex items-center bg-slate-200/80 dark:bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
+            <button id="viewEraRowsBtn" class="px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5 bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-sm" title="Group by Album / Era Rows">
+              <i class="ph-bold ph-rows"></i>
+              <span class="hidden sm:inline">By Era</span>
+            </button>
+            <button id="viewGridBtn" class="px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white" title="All-in-one Grid">
+              <i class="ph-bold ph-squares-four"></i>
+              <span class="hidden sm:inline">Grid</span>
             </button>
           </div>
 
@@ -189,6 +201,7 @@
             <option value="oldest">Oldest First</option>
             <option value="member">Idol / Member (A-Z)</option>
             <option value="group">Group / Artist (A-Z)</option>
+            <option value="album">Album / Era (A-Z)</option>
           </select>
         </div>
       </div>
@@ -199,10 +212,14 @@
       </div>
     </section>
 
-    <!-- Cards Grid -->
+    <!-- Cards Display Container (Supports Album/Era Rows & Grid) -->
     <section>
-      <div id="cardsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-        <!-- Rendered by JS -->
+      <div id="eraRowsContainer" class="space-y-6">
+        <!-- Rendered dynamically by era/album -->
+      </div>
+
+      <div id="cardsGrid" class="hidden grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+        <!-- Flat grid fallback -->
       </div>
 
       <!-- Empty State -->
@@ -280,7 +297,8 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">Album / Era</label>
-            <input type="text" id="inputAlbum" placeholder="e.g. GOLDEN HOUR : Part.1" class="w-full px-3 py-2 text-sm rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <input type="text" id="inputAlbum" list="albumSuggestions" placeholder="e.g. GOLDEN HOUR : Part.1" class="w-full px-3 py-2 text-sm rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <datalist id="albumSuggestions"></datalist>
           </div>
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">Version / Type</label>
@@ -412,14 +430,95 @@
     let currentFilterGroup = 'all';
     let currentSearchTerm = '';
     let currentSort = 'newest';
+    let currentViewMode = 'eras'; // 'eras' | 'grid'
 
     // Image buffer for upload modal
     let currentImageDataUrl = '';
 
+    // --- IndexedDB Helper for Large Photo Storage ---
+    const DB_NAME = 'PocaTrackDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'cards';
+
+    function openDB() {
+      return new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+          resolve(null);
+          return;
+        }
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => resolve(null);
+      });
+    }
+
+    async function loadCollection() {
+      const db = await openDB();
+      if (db) {
+        return new Promise((resolve) => {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const store = tx.objectStore(STORE_NAME);
+          const getAll = store.getAll();
+          getAll.onsuccess = () => {
+            if (getAll.result && getAll.result.length > 0) {
+              cards = getAll.result;
+            } else {
+              // Try local storage migration or fallback to starter demo
+              const raw = localStorage.getItem(STORAGE_KEY);
+              if (raw) {
+                try {
+                  cards = JSON.parse(raw);
+                } catch {
+                  cards = [...STARTER_CARDS];
+                }
+              } else {
+                cards = [...STARTER_CARDS];
+              }
+              saveCollection();
+            }
+            resolve();
+          };
+          getAll.onerror = () => {
+            cards = [...STARTER_CARDS];
+            resolve();
+          };
+        });
+      } else {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          try { cards = JSON.parse(raw); } catch { cards = [...STARTER_CARDS]; }
+        } else {
+          cards = [...STARTER_CARDS];
+        }
+      }
+    }
+
+    async function saveCollection() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+      } catch (err) {
+        console.warn("LocalStorage full, prioritizing IndexedDB.");
+      }
+
+      const db = await openDB();
+      if (db) {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.clear();
+        cards.forEach(card => store.put(card));
+      }
+    }
+
     // --- Core Initialization ---
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', async () => {
       initTheme();
-      loadCollection();
+      await loadCollection();
       setupEventListeners();
       renderApp();
     });
@@ -441,31 +540,6 @@
       const isDark = document.documentElement.classList.toggle('dark');
       localStorage.setItem('pocatrack_theme', isDark ? 'dark' : 'light');
       document.getElementById('themeIcon').className = isDark ? 'ph-bold ph-sun text-lg text-amber-400' : 'ph-bold ph-moon text-lg';
-    }
-
-    // Load cards from LocalStorage
-    function loadCollection() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        try {
-          cards = JSON.parse(raw);
-        } catch (e) {
-          console.error("Failed to parse collection JSON, reverting to starter demo", e);
-          cards = [...STARTER_CARDS];
-          saveCollection();
-        }
-      } else {
-        cards = [...STARTER_CARDS];
-        saveCollection();
-      }
-    }
-
-    function saveCollection() {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
-      } catch (e) {
-        showToast("Storage quota exceeded! Try compressing or using external URLs.", "error");
-      }
     }
 
     // --- Setup Listeners ---
@@ -490,6 +564,24 @@
 
       document.getElementById('sortSelect').addEventListener('change', (e) => {
         currentSort = e.target.value;
+        renderCards();
+      });
+
+      // View Mode Toggle (Era Rows vs Flat Grid)
+      const viewEraRowsBtn = document.getElementById('viewEraRowsBtn');
+      const viewGridBtn = document.getElementById('viewGridBtn');
+
+      viewEraRowsBtn.addEventListener('click', () => {
+        currentViewMode = 'eras';
+        viewEraRowsBtn.className = "px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5 bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-sm";
+        viewGridBtn.className = "px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white";
+        renderCards();
+      });
+
+      viewGridBtn.addEventListener('click', () => {
+        currentViewMode = 'grid';
+        viewGridBtn.className = "px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5 bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-sm";
+        viewEraRowsBtn.className = "px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white";
         renderCards();
       });
 
@@ -568,7 +660,6 @@
       reader.onload = function(event) {
         const img = new Image();
         img.onload = function() {
-          // Compress on client canvas to save localStorage space (max width 600px)
           const canvas = document.createElement('canvas');
           const MAX_WIDTH = 600;
           let width = img.width;
@@ -584,7 +675,6 @@
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Get optimized base64 jpeg
           const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
           currentImageDataUrl = compressedDataUrl;
           document.getElementById('imageUrlInput').value = '';
@@ -610,8 +700,8 @@
       }
     }
 
-    // Modal Display Controls
-    function openModal(editId = null) {
+    // Modal Display Controls (Supports prefilled album/group)
+    function openModal(editId = null, prefill = null) {
       const modal = document.getElementById('cardModal');
       const dialog = document.getElementById('cardModalDialog');
       const title = document.getElementById('modalTitle');
@@ -620,7 +710,7 @@
       form.reset();
       currentImageDataUrl = '';
       updateImagePreview('');
-      updateGroupDatalist();
+      updateSuggestionsDatalist();
 
       if (editId) {
         const item = cards.find(c => c.id === editId);
@@ -648,6 +738,11 @@
         title.textContent = 'Add Photocard';
         document.getElementById('editCardId').value = '';
         document.querySelector('input[name="inputStatus"][value="have"]').checked = true;
+
+        if (prefill) {
+          if (prefill.album) document.getElementById('inputAlbum').value = prefill.album;
+          if (prefill.group) document.getElementById('inputGroup').value = prefill.group;
+        }
       }
 
       modal.classList.remove('hidden');
@@ -675,17 +770,15 @@
       const editId = document.getElementById('editCardId').value;
       const group = document.getElementById('inputGroup').value.trim();
       const member = document.getElementById('inputMember').value.trim();
-      const album = document.getElementById('inputAlbum').value.trim();
+      const album = document.getElementById('inputAlbum').value.trim() || 'General / Non-Album';
       const version = document.getElementById('inputVersion').value.trim();
       const notes = document.getElementById('inputNotes').value.trim();
       const status = document.querySelector('input[name="inputStatus"]:checked').value;
 
-      // Default placeholder if no picture provided
       const defaultPlaceholder = `https://placehold.co/400x600/f3f4f6/334155?text=${encodeURIComponent(member || 'Photocard')}`;
       const imageUrl = currentImageDataUrl || defaultPlaceholder;
 
       if (editId) {
-        // Update existing card
         const index = cards.findIndex(c => c.id === editId);
         if (index !== -1) {
           cards[index] = {
@@ -701,7 +794,6 @@
           showToast(`Updated "${member}" card`);
         }
       } else {
-        // Add new card
         const newCard = {
           id: 'pc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
           group,
@@ -714,7 +806,7 @@
           createdAt: Date.now()
         };
         cards.unshift(newCard);
-        showToast(`Added "${member}" (${group}) to collection`);
+        showToast(`Added "${member}" (${album})`);
       }
 
       saveCollection();
@@ -722,7 +814,6 @@
       closeModal();
     }
 
-    // Toggle single photocard between 'have' and 'missing'
     function toggleCardStatus(id) {
       const card = cards.find(c => c.id === id);
       if (!card) return;
@@ -732,7 +823,6 @@
       showToast(`${card.member} set to ${card.status === 'have' ? 'Owned' : 'Missing'}`);
     }
 
-    // Delete photocard
     function deleteCard(id) {
       const card = cards.find(c => c.id === id);
       const name = card ? `${card.member} (${card.group})` : 'this card';
@@ -800,23 +890,24 @@
       renderCards();
     };
 
-    function updateGroupDatalist() {
-      const list = document.getElementById('groupSuggestions');
+    function updateSuggestionsDatalist() {
+      const groupList = document.getElementById('groupSuggestions');
       const groups = Array.from(new Set(cards.map(c => c.group).filter(Boolean)));
-      list.innerHTML = groups.map(g => `<option value="${escapeHtml(g)}">`).join('');
+      groupList.innerHTML = groups.map(g => `<option value="${escapeHtml(g)}">`).join('');
+
+      const albumList = document.getElementById('albumSuggestions');
+      const albums = Array.from(new Set(cards.map(c => c.album).filter(Boolean)));
+      albumList.innerHTML = albums.map(a => `<option value="${escapeHtml(a)}">`).join('');
     }
 
     function getFilteredCards() {
       return cards.filter(card => {
-        // Status filter
         if (currentFilterStatus !== 'all' && card.status !== currentFilterStatus) {
           return false;
         }
-        // Group filter
         if (currentFilterGroup !== 'all' && card.group.toLowerCase() !== currentFilterGroup.toLowerCase()) {
           return false;
         }
-        // Search term
         if (currentSearchTerm) {
           const matchTarget = `${card.member} ${card.group} ${card.album || ''} ${card.version || ''} ${card.notes || ''}`.toLowerCase();
           if (!matchTarget.includes(currentSearchTerm)) {
@@ -829,104 +920,209 @@
         if (currentSort === 'oldest') return (a.createdAt || 0) - (b.createdAt || 0);
         if (currentSort === 'member') return (a.member || '').localeCompare(b.member || '');
         if (currentSort === 'group') return (a.group || '').localeCompare(b.group || '');
+        if (currentSort === 'album') return (a.album || '').localeCompare(b.album || '');
         return 0;
       });
     }
 
+    // Single Card HTML Generator
+    function createCardHTML(card) {
+      const isHave = card.status === 'have';
+      return `
+        <div class="group relative bg-white dark:bg-slate-900 rounded-2xl border ${isHave ? 'border-slate-200/90 dark:border-slate-800' : 'border-dashed border-amber-300 dark:border-amber-800/60'} shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col">
+          
+          <!-- Card Image Container -->
+          <div class="relative w-full aspect-photocard bg-slate-100 dark:bg-slate-800 overflow-hidden cursor-pointer" onclick="openModal('${card.id}')">
+            <img 
+              src="${card.imageUrl}" 
+              alt="${escapeHtml(card.member)}" 
+              class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${!isHave ? 'opacity-85 grayscale-[30%]' : ''}"
+              loading="lazy"
+              onerror="this.onerror=null; this.src='https://placehold.co/400x600/f3f4f6/334155?text=No+Photo';"
+            >
+            
+            <!-- Status Badge (Top-left) -->
+            <div class="absolute top-2 left-2 z-10">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase shadow-md backdrop-blur-md ${isHave ? 'bg-emerald-500/90 text-white' : 'bg-amber-500/90 text-white'}">
+                <i class="ph-bold ${isHave ? 'ph-check-circle' : 'ph-heart'}"></i>
+                ${isHave ? 'Have' : 'Wishlist'}
+              </span>
+            </div>
+
+            <!-- Top-right Quick Actions -->
+            <div class="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-10" onclick="event.stopPropagation()">
+              <button onclick="openModal('${card.id}')" class="w-7 h-7 rounded-full bg-white/90 dark:bg-slate-900/90 text-slate-700 dark:text-slate-200 flex items-center justify-center hover:bg-white dark:hover:bg-slate-900 shadow-md transition" title="Edit">
+                <i class="ph-bold ph-pencil-simple text-xs"></i>
+              </button>
+              <button onclick="deleteCard('${card.id}')" class="w-7 h-7 rounded-full bg-white/90 dark:bg-slate-900/90 text-red-600 dark:text-red-400 flex items-center justify-center hover:bg-white dark:hover:bg-slate-900 shadow-md transition" title="Delete">
+                <i class="ph-bold ph-trash text-xs"></i>
+              </button>
+            </div>
+
+            <!-- Version Tag Overlay -->
+            ${card.version ? `
+              <div class="absolute bottom-2 left-2 right-2 z-10">
+                <span class="inline-block max-w-full truncate px-2 py-0.5 rounded-lg text-[10px] font-medium bg-slate-900/80 text-white backdrop-blur-sm">
+                  ${escapeHtml(card.version)}
+                </span>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Card Metadata Details -->
+          <div class="p-3 flex-1 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between gap-1 mb-0.5">
+                <span class="text-[11px] font-semibold tracking-wider uppercase text-brand-600 dark:text-brand-400 truncate">${escapeHtml(card.group)}</span>
+              </div>
+              <h4 class="font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-tight truncate" title="${escapeHtml(card.member)}">${escapeHtml(card.member)}</h4>
+              
+              ${card.album ? `
+                <p class="text-[11px] text-slate-600 dark:text-slate-300 truncate mt-0.5" title="${escapeHtml(card.album)}">
+                  ${escapeHtml(card.album)}
+                </p>
+              ` : ''}
+
+              ${card.notes ? `
+                <p class="text-[10px] text-slate-600 dark:text-slate-300 italic truncate mt-1">
+                  "${escapeHtml(card.notes)}"
+                </p>
+              ` : ''}
+            </div>
+
+            <!-- Toggle Have/Wishlist Quick Button -->
+            <div class="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800">
+              <button 
+                onclick="toggleCardStatus('${card.id}')" 
+                class="w-full py-1.5 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition active:scale-95 ${isHave 
+                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/50' 
+                  : 'bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:hover:bg-amber-950/70 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/50'}"
+              >
+                <i class="ph-bold ${isHave ? 'ph-check' : 'ph-plus'}"></i>
+                <span>${isHave ? 'Mark Wishlist' : 'Mark Owned'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Toggle collapsing an era row
+    window.toggleEraRow = function(shelfId) {
+      const row = document.getElementById(shelfId);
+      const icon = document.getElementById('icon_' + shelfId);
+      if (row) {
+        row.classList.toggle('hidden');
+        if (icon) {
+          icon.classList.toggle('rotate-180');
+        }
+      }
+    };
+
+    window.addCardToEra = function(albumName, groupName) {
+      openModal(null, { album: albumName, group: groupName });
+    };
+
     function renderCards() {
-      const grid = document.getElementById('cardsGrid');
+      const rowsContainer = document.getElementById('eraRowsContainer');
+      const gridContainer = document.getElementById('cardsGrid');
       const emptyState = document.getElementById('emptyState');
       const filtered = getFilteredCards();
 
       if (filtered.length === 0) {
-        grid.innerHTML = '';
+        rowsContainer.innerHTML = '';
+        gridContainer.innerHTML = '';
         emptyState.classList.remove('hidden');
         return;
       }
 
       emptyState.classList.add('hidden');
 
-      grid.innerHTML = filtered.map(card => {
-        const isHave = card.status === 'have';
-        return `
-          <div class="group relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col">
+      if (currentViewMode === 'grid') {
+        rowsContainer.classList.add('hidden');
+        gridContainer.classList.remove('hidden');
+        gridContainer.innerHTML = filtered.map(card => createCardHTML(card)).join('');
+        return;
+      }
+
+      // Group into separate Album / Era rows
+      gridContainer.classList.add('hidden');
+      rowsContainer.classList.remove('hidden');
+
+      // Group cards by "Group Name - Album Name" to keep albums cleanly separated per artist
+      const eraMap = new Map();
+
+      filtered.forEach(card => {
+        const albumTitle = card.album || 'General / Non-Album';
+        const groupTitle = card.group || 'Unknown Artist';
+        const key = `${groupTitle} — ${albumTitle}`;
+
+        if (!eraMap.has(key)) {
+          eraMap.set(key, {
+            group: groupTitle,
+            album: albumTitle,
+            cards: []
+          });
+        }
+        eraMap.get(key).cards.push(card);
+      });
+
+      let html = '';
+      let index = 0;
+
+      eraMap.forEach((eraData, key) => {
+        index++;
+        const shelfId = 'era_shelf_' + index;
+        const eraCards = eraData.cards;
+        const eraOwned = eraCards.filter(c => c.status === 'have').length;
+        const eraTotal = eraCards.length;
+        const eraPct = Math.round((eraOwned / eraTotal) * 100);
+
+        html += `
+          <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
             
-            <!-- Card Image Container -->
-            <div class="relative w-full aspect-photocard bg-slate-100 dark:bg-slate-800 overflow-hidden cursor-pointer" onclick="openModal('${card.id}')">
-              <img 
-                src="${card.imageUrl}" 
-                alt="${escapeHtml(card.member)}" 
-                class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                loading="lazy"
-                onerror="this.onerror=null; this.src='https://placehold.co/400x600/f3f4f6/334155?text=No+Photo';"
-              >
-              
-              <!-- Status Badge (Top-left) -->
-              <div class="absolute top-2 left-2 z-10">
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase shadow-md backdrop-blur-md ${isHave ? 'bg-emerald-500/90 text-white' : 'bg-amber-500/90 text-white'}">
-                  <i class="ph-bold ${isHave ? 'ph-check-circle' : 'ph-heart'}"></i>
-                  ${isHave ? 'Have' : 'Wishlist'}
-                </span>
-              </div>
-
-              <!-- Top-right Quick Actions -->
-              <div class="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-10" onclick="event.stopPropagation()">
-                <button onclick="openModal('${card.id}')" class="w-7 h-7 rounded-full bg-white/90 dark:bg-slate-900/90 text-slate-700 dark:text-slate-200 flex items-center justify-center hover:bg-white dark:hover:bg-slate-900 shadow-md transition" title="Edit">
-                  <i class="ph-bold ph-pencil-simple text-xs"></i>
+            <!-- Era Row Header / Shelf Info -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div class="flex items-start sm:items-center gap-3">
+                <button onclick="toggleEraRow('${shelfId}')" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition mt-0.5 sm:mt-0" title="Collapse / Expand Era">
+                  <i id="icon_${shelfId}" class="ph-bold ph-caret-down text-lg transition-transform duration-200"></i>
                 </button>
-                <button onclick="deleteCard('${card.id}')" class="w-7 h-7 rounded-full bg-white/90 dark:bg-slate-900/90 text-red-600 dark:text-red-400 flex items-center justify-center hover:bg-white dark:hover:bg-slate-900 shadow-md transition" title="Delete">
-                  <i class="ph-bold ph-trash text-xs"></i>
-                </button>
-              </div>
-
-              <!-- Type / Era Overlay Tag -->
-              ${card.version ? `
-                <div class="absolute bottom-2 left-2 right-2 z-10">
-                  <span class="inline-block max-w-full truncate px-2 py-0.5 rounded-lg text-[10px] font-medium bg-slate-900/80 text-white backdrop-blur-sm">
-                    ${escapeHtml(card.version)}
-                  </span>
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <h3 class="font-bold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight">${escapeHtml(eraData.album)}</h3>
+                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-400 border border-brand-200/60 dark:border-brand-900/60">
+                      ${escapeHtml(eraData.group)}
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-2 mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    <span>${eraOwned} / ${eraTotal} cards owned</span>
+                    <span>•</span>
+                    <span class="${eraPct === 100 ? 'text-emerald-500 font-bold' : ''}">${eraPct}% completed</span>
+                  </div>
                 </div>
-              ` : ''}
+              </div>
+
+              <!-- Right Header Actions (Quick Add + Mini Progress) -->
+              <div class="flex items-center gap-3 self-end sm:self-auto">
+                <div class="hidden sm:block w-28 bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div class="bg-emerald-500 h-full rounded-full transition-all duration-300" style="width: ${eraPct}%"></div>
+                </div>
+                <button onclick="addCardToEra('${escapeHtml(eraData.album)}', '${escapeHtml(eraData.group)}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition" title="Add Card to this Era">
+                  <i class="ph-bold ph-plus"></i> Add to Era
+                </button>
+              </div>
             </div>
 
-            <!-- Card Metadata Details -->
-            <div class="p-3 flex-1 flex flex-col justify-between">
-              <div>
-                <div class="flex items-center justify-between gap-1 mb-0.5">
-                  <span class="text-[11px] font-semibold tracking-wider uppercase text-brand-600 dark:text-brand-400 truncate">${escapeHtml(card.group)}</span>
-                </div>
-                <h4 class="font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-tight truncate" title="${escapeHtml(card.member)}">${escapeHtml(card.member)}</h4>
-                
-                ${card.album ? `
-                  <p class="text-[11px] text-slate-600 dark:text-slate-300 truncate mt-0.5" title="${escapeHtml(card.album)}">
-                    ${escapeHtml(card.album)}
-                  </p>
-                ` : ''}
-
-                ${card.notes ? `
-                  <p class="text-[10px] text-slate-600 dark:text-slate-300 italic truncate mt-1">
-                    "${escapeHtml(card.notes)}"
-                  </p>
-                ` : ''}
-              </div>
-
-              <!-- Toggle Have/Wishlist Quick Button -->
-              <div class="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800">
-                <button 
-                  onclick="toggleCardStatus('${card.id}')" 
-                  class="w-full py-1.5 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition active:scale-95 ${isHave 
-                    ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/50' 
-                    : 'bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:hover:bg-amber-950/70 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/50'}"
-                >
-                  <i class="ph-bold ${isHave ? 'ph-check' : 'ph-plus'}"></i>
-                  <span>${isHave ? 'Mark Wishlist' : 'Mark Owned'}</span>
-                </button>
-              </div>
-
+            <!-- Era Cards Row Grid -->
+            <div id="${shelfId}" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 transition-all">
+              ${eraCards.map(card => createCardHTML(card)).join('')}
             </div>
+
           </div>
         `;
-      }).join('');
+      });
+
+      rowsContainer.innerHTML = html;
     }
 
     // --- JSON Backup / Export / Import ---
@@ -947,13 +1143,13 @@
       if (!file) return;
 
       const reader = new FileReader();
-      reader.onload = function(evt) {
+      reader.onload = async function(evt) {
         try {
           const parsed = JSON.parse(evt.target.result);
           if (Array.isArray(parsed)) {
             if (confirmAction(`Import ${parsed.length} photocards? This will replace your current collection.`)) {
               cards = parsed;
-              saveCollection();
+              await saveCollection();
               renderApp();
               showToast(`Imported ${parsed.length} photocards!`);
             }
@@ -963,7 +1159,7 @@
         } catch (err) {
           showToast("Failed to parse backup JSON file.", "error");
         }
-        e.target.value = ''; // Reset input
+        e.target.value = '';
       };
       reader.readAsText(file);
     }
@@ -980,7 +1176,6 @@
     }
 
     function confirmAction(message) {
-      // Custom confirmation wrapper without native prompt quirks
       return window.confirm(message);
     }
 
