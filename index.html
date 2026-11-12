@@ -84,7 +84,7 @@
           </button>
 
           <!-- Google Sign-In Button (shown if configured but signed out) -->
-          <button id="googleSignInBtn" class="hidden flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs sm:text-sm shadow-sm transition active:scale-95">
+          <button id="googleSignInBtn" class="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs sm:text-sm shadow-sm transition active:scale-95">
             <svg class="w-4 h-4" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"/>
               <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24Z"/>
@@ -341,7 +341,7 @@
               <div class="relative">
                 <input type="url" id="imageUrlInput" placeholder="Or paste image URL..." class="w-full px-3 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
               </div>
-              <p class="text-[11px] text-slate-600 dark:text-slate-300">Images uploaded locally are compressed & saved in your browser storage.</p>
+              <p class="text-[11px] text-slate-600 dark:text-slate-300">Images uploaded locally are compressed & synced to your cloud account.</p>
             </div>
           </div>
         </div>
@@ -448,9 +448,6 @@
   messagingSenderId: "123456789",
   appId: "1:123456789:web:abcdef"
 }' class="w-full p-3 text-xs font-mono rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            Saved in this browser's localStorage. You can also paste it permanently into <code class="font-mono">HARDCODED_FIREBASE_CONFIG</code> at the top of <code class="font-mono">index.html</code> so every device connects automatically!
-          </p>
         </div>
 
         <div class="pt-2 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800">
@@ -470,7 +467,7 @@
     </div>
   </div>
 
-  <!-- Custom Confirmation Modal (Replaces native window.confirm) -->
+  <!-- Custom Confirmation Modal -->
   <div id="confirmModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
     <div class="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4">
       <div class="flex items-start gap-3">
@@ -497,20 +494,17 @@
 
   <script>
     // =========================================================================
-    // OPTIONAL: Paste your Firebase Config object below so any device (desktop
-    // or mobile) connects automatically without needing to paste it in the UI!
+    // Embedded Firebase Config (Connected automatically on Desktop & Mobile)
     // =========================================================================
-    const HARDCODED_FIREBASE_CONFIG = null;
-    /* Example:
     const HARDCODED_FIREBASE_CONFIG = {
-      apiKey: "AIzaSy...",
-      authDomain: "my-photocards.firebaseapp.com",
-      projectId: "my-photocards",
-      storageBucket: "my-photocards.firebasestorage.app",
-      messagingSenderId: "1234567890",
-      appId: "1:1234567890:web:abcdef123456"
+      apiKey: "AIzaSyCKv6GL2fGDOtwxYDOqwTA0pazke_Runpc",
+      authDomain: "my-photocard-collection.firebaseapp.com",
+      projectId: "my-photocard-collection",
+      storageBucket: "my-photocard-collection.firebasestorage.app",
+      messagingSenderId: "35060191466",
+      appId: "1:35060191466:web:874011f830ca04c885c793",
+      measurementId: "G-E2SV94SNGR"
     };
-    */
 
     // --- Initial Demo / Starter Data ---
     const STARTER_CARDS = [
@@ -586,12 +580,12 @@
     const STORAGE_KEY = 'pocatrack_collection_v1';
     const FIREBASE_CONFIG_KEY = 'pocatrack_firebase_config_v1';
     let cards = [];
-    let localBackupCards = []; // Holds local IndexedDB cards when signed into cloud
-    let currentFilterStatus = 'all'; // 'all' | 'have' | 'missing'
+    let localBackupCards = [];
+    let currentFilterStatus = 'all';
     let currentFilterGroup = 'all';
     let currentSearchTerm = '';
     let currentSort = 'newest';
-    let currentViewMode = 'eras'; // 'eras' | 'grid'
+    let currentViewMode = 'eras';
 
     // Firebase Runtime State
     let fbApp = null;
@@ -610,7 +604,7 @@
     const STORE_NAME = 'cards';
 
     function openDB() {
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         if (!window.indexedDB) {
           resolve(null);
           return;
@@ -638,7 +632,6 @@
             if (getAll.result && getAll.result.length > 0) {
               cards = getAll.result;
             } else {
-              // Try local storage migration or fallback to starter demo
               const raw = localStorage.getItem(STORAGE_KEY);
               if (raw) {
                 try {
@@ -704,12 +697,10 @@
 
     function parseFirebaseConfigString(inputStr) {
       let cleaned = inputStr.trim();
-      // Strip optional "const firebaseConfig = " or trailing ";"
       cleaned = cleaned.replace(/^(const|let|var)\s+\w+\s*=\s*/, '').replace(/;$/, '').trim();
       try {
         return JSON.parse(cleaned);
       } catch {
-        // Convert unquoted JS object keys (e.g. apiKey: "...") to valid JSON
         const jsonified = cleaned
           .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
           .replace(/'/g, '"')
@@ -733,6 +724,13 @@
         }
         fbAuth = firebase.auth();
         fbDb = firebase.firestore();
+
+        fbAuth.getRedirectResult().catch((err) => {
+          if (err && err.code !== 'auth/null-user') {
+            console.error("Redirect sign-in error:", err);
+            showToast("Sign-in failed: " + err.message, "error");
+          }
+        });
 
         fbAuth.onAuthStateChanged((user) => {
           currentUser = user;
@@ -766,7 +764,6 @@
         });
 
         cards = cloudCards;
-        // Cache latest cloud copy locally for offline viewing
         saveLocalCollection(cards);
         renderApp();
         updateAuthUI();
@@ -793,8 +790,7 @@
         return;
       }
 
-      // Filter out default starter demo cards if user has real cards, or sync all localBackupCards
-      const toUpload = localBackupCards.filter(c => !c.id.startsWith('pc_1') && !c.id.startsWith('pc_2') && !c.id.startsWith('pc_3') && !c.id.startsWith('pc_4') && !c.id.startsWith('pc_5') && !c.id.startsWith('pc_6'));
+      const toUpload = localBackupCards.filter(c => !['pc_1', 'pc_2', 'pc_3', 'pc_4', 'pc_5', 'pc_6'].includes(c.id));
       const sourceList = toUpload.length > 0 ? toUpload : localBackupCards;
 
       if (sourceList.length === 0) {
@@ -807,7 +803,6 @@
 
       try {
         showToast(`Syncing ${sourceList.length} cards to cloud...`, "info");
-        // Firestore batch supports up to 500 writes per batch
         const chunkSize = 400;
         for (let i = 0; i < sourceList.length; i += chunkSize) {
           const batch = fbDb.batch();
@@ -877,14 +872,8 @@
         document.getElementById('userNameDisplay').textContent = currentUser.displayName || currentUser.email || 'Collector';
         document.getElementById('userAvatar').src = currentUser.photoURL || `https://placehold.co/64x64/ec4899/ffffff?text=${encodeURIComponent((currentUser.displayName || 'U')[0])}`;
 
-        // Offer one-click migration if user has local cards that aren't in the cloud yet
         const hasLocalCardsNotInCloud = localBackupCards.some(localCard => 
-          !localCard.id.startsWith('pc_1') && 
-          !localCard.id.startsWith('pc_2') && 
-          !localCard.id.startsWith('pc_3') && 
-          !localCard.id.startsWith('pc_4') && 
-          !localCard.id.startsWith('pc_5') && 
-          !localCard.id.startsWith('pc_6') &&
+          !['pc_1', 'pc_2', 'pc_3', 'pc_4', 'pc_5', 'pc_6'].includes(localCard.id) &&
           !cards.some(cloudCard => cloudCard.id === localCard.id)
         );
 
@@ -905,13 +894,17 @@
         openFirebaseModal();
         return;
       }
+      const provider = new firebase.auth.GoogleAuthProvider();
       try {
-        const provider = new firebase.auth.GoogleAuthProvider();
         await fbAuth.signInWithPopup(provider);
         showToast("Signed in with Google!");
       } catch (err) {
-        console.error("Google sign-in error:", err);
-        showToast("Sign-in failed: " + err.message, "error");
+        if (err.code === 'auth/popup-blocked' || err.code === 'auth/operation-not-supported-in-this-environment') {
+          await fbAuth.signInWithRedirect(provider);
+        } else {
+          console.error("Google sign-in error:", err);
+          showToast("Sign-in failed: " + err.message, "error");
+        }
       }
     }
 
@@ -934,7 +927,6 @@
       renderApp();
     });
 
-    // Theme toggler
     function initTheme() {
       const isDark = localStorage.getItem('pocatrack_theme') === 'dark' || 
         (!('pocatrack_theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -955,10 +947,8 @@
 
     // --- Setup Listeners ---
     function setupEventListeners() {
-      // Theme
       document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
 
-      // Search and Filter controls
       const searchInput = document.getElementById('searchInput');
       const clearSearchBtn = document.getElementById('clearSearchBtn');
       searchInput.addEventListener('input', (e) => {
@@ -978,7 +968,6 @@
         renderCards();
       });
 
-      // View Mode Toggle (Era Rows vs Flat Grid)
       const viewEraRowsBtn = document.getElementById('viewEraRowsBtn');
       const viewGridBtn = document.getElementById('viewGridBtn');
 
@@ -996,7 +985,6 @@
         renderCards();
       });
 
-      // Status Tabs
       document.querySelectorAll('.filter-status-tab').forEach(tab => {
         tab.addEventListener('click', () => {
           document.querySelectorAll('.filter-status-tab').forEach(t => {
@@ -1010,21 +998,17 @@
         });
       });
 
-      // Add Card Modal triggers
       document.getElementById('openAddModalBtn').addEventListener('click', () => openModal());
       document.getElementById('emptyStateAddBtn').addEventListener('click', () => openModal());
       document.getElementById('closeModalBtn').addEventListener('click', closeModal);
       document.getElementById('cancelModalBtn').addEventListener('click', closeModal);
 
-      // Dismiss modal on outer click
       document.getElementById('cardModal').addEventListener('click', (e) => {
         if (e.target.id === 'cardModal') closeModal();
       });
 
-      // Form submission
       document.getElementById('cardForm').addEventListener('submit', handleFormSubmit);
 
-      // Image Upload & URL input
       const imageFileInput = document.getElementById('imageFileInput');
       const imageUrlInput = document.getElementById('imageUrlInput');
 
@@ -1040,7 +1024,6 @@
         }
       });
 
-      // Dropdown Tools menu toggle
       const toolsMenuBtn = document.getElementById('toolsMenuBtn');
       const toolsMenu = document.getElementById('toolsMenu');
       toolsMenuBtn.addEventListener('click', (e) => {
@@ -1049,7 +1032,6 @@
       });
       document.addEventListener('click', () => toolsMenu.classList.add('hidden'));
 
-      // Export / Import / Reset
       document.getElementById('exportBtn').addEventListener('click', exportCollection);
       document.getElementById('importInput').addEventListener('change', importCollection);
       document.getElementById('resetStarterBtn').addEventListener('click', async () => {
@@ -1067,7 +1049,6 @@
         }
       });
 
-      // Firebase Auth & Config Modal Listeners
       document.getElementById('openFirebaseSetupBtn').addEventListener('click', openFirebaseModal);
       document.getElementById('menuFirebaseConfigBtn').addEventListener('click', openFirebaseModal);
       document.getElementById('closeFirebaseModalBtn').addEventListener('click', closeFirebaseModal);
@@ -1146,7 +1127,7 @@
       }, 200);
     }
 
-    // Modal Image Compression and handling (Optimized for Firestore < 1MB doc limit)
+    // Modal Image Compression and handling
     function handleImageFileUpload(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -1170,7 +1151,6 @@
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Compress to JPEG 0.8 quality (~60KB-150KB) to fit well within Firestore's 1MB limit
           const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
           currentImageDataUrl = compressedDataUrl;
           document.getElementById('imageUrlInput').value = '';
@@ -1196,7 +1176,6 @@
       }
     }
 
-    // Modal Display Controls (Supports prefilled album/group)
     function openModal(editId = null, prefill = null) {
       const modal = document.getElementById('cardModal');
       const dialog = document.getElementById('cardModalDialog');
@@ -1260,7 +1239,6 @@
       }, 200);
     }
 
-    // Save Form Handler
     async function handleFormSubmit(e) {
       e.preventDefault();
       const editId = document.getElementById('editCardId').value;
@@ -1446,7 +1424,6 @@
       });
     }
 
-    // Single Card HTML Generator
     function createCardHTML(card) {
       const isHave = card.status === 'have';
       return `
@@ -1528,7 +1505,6 @@
       `;
     }
 
-    // Toggle collapsing an era row
     window.toggleEraRow = function(shelfId) {
       const row = document.getElementById(shelfId);
       const icon = document.getElementById('icon_' + shelfId);
@@ -1566,11 +1542,9 @@
         return;
       }
 
-      // Group into separate Album / Era rows
       gridContainer.classList.add('hidden');
       rowsContainer.classList.remove('hidden');
 
-      // Group cards by "Group Name - Album Name" to keep albums cleanly separated per artist
       const eraMap = new Map();
 
       filtered.forEach(card => {
@@ -1591,7 +1565,7 @@
       let html = '';
       let index = 0;
 
-      eraMap.forEach((eraData, key) => {
+      eraMap.forEach((eraData) => {
         index++;
         const shelfId = 'era_shelf_' + index;
         const eraCards = eraData.cards;
@@ -1623,7 +1597,7 @@
                 </div>
               </div>
 
-              <!-- Right Header Actions (Quick Add + Mini Progress) -->
+              <!-- Right Header Actions -->
               <div class="flex items-center gap-3 self-end sm:self-auto">
                 <div class="hidden sm:block w-28 bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
                   <div class="bg-emerald-500 h-full rounded-full transition-all duration-300" style="width: ${eraPct}%"></div>
@@ -1738,31 +1712,6 @@
         okBtn.addEventListener('click', onOk);
         cancelBtn.addEventListener('click', onCancel);
       });
-    }
-          } else {
-            showToast("Invalid JSON file format.", "error");
-          }
-        } catch (err) {
-          showToast("Failed to parse backup JSON file.", "error");
-        }
-        e.target.value = '';
-      };
-      reader.readAsText(file);
-    }
-
-    // --- Utilities & Toast ---
-    function escapeHtml(str) {
-      if (!str) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
-
-    function confirmAction(message) {
-      return window.confirm(message);
     }
 
     let toastTimer = null;
