@@ -1939,7 +1939,7 @@
     }
 
     const MEMBER_AGE_ORDER = {
-      'stray kids': ['bang chan', 'bang chhan', 'lee know', 'changbin', 'hyunjin', 'han', 'felix', 'seungmin', 'i.n', 'in'],
+      'stray kids': ['bang chan', 'bangchan', 'banchan', 'bang chhan', 'lee know', 'changbin', 'hyunjin', 'han', 'felix', 'seungmin', 'i.n', 'in'],
       'ateez': ['seonghwa', 'hongjoong', 'yunho', 'yeosang', 'san', 'mingi', 'wooyoung', 'jongho'],
       'big ocean': ['chanyeon', 'pj', 'hyunjin', 'jiseok'],
       '8turn': ['jaeyun', 'myungho', 'minho', 'yoonseong', 'haemin', 'kyungmin', 'yungyu', 'seungheon'],
@@ -2023,6 +2023,18 @@
     function normalizeCardData(card) {
       let updated = false;
       const copy = { ...card };
+      if (copy.album && /music\s*koea/i.test(copy.album)) {
+        copy.album = copy.album.replace(/music\s*koea/gi, 'Music Korea');
+        updated = true;
+      }
+      if (copy.version && /music\s*koea/i.test(copy.version)) {
+        copy.version = copy.version.replace(/music\s*koea/gi, 'Music Korea');
+        updated = true;
+      }
+      if (copy.notes && /music\s*koea/i.test(copy.notes)) {
+        copy.notes = copy.notes.replace(/music\s*koea/gi, 'Music Korea');
+        updated = true;
+      }
       if (copy.album && /do\s*it\s*\/\s*music\s*kor[a-z]*/i.test(copy.album)) {
         if (copy.album !== 'Do It / Music Korea') {
           copy.album = 'Do It / Music Korea';
@@ -2035,7 +2047,7 @@
           updated = true;
         }
       }
-      if (copy.member && /^bang\s*chhan$/i.test(copy.member.trim())) {
+      if (copy.member && /^(bang\s*chhan|bangchan|banchan)$/i.test(copy.member.trim())) {
         copy.member = 'Bang Chan';
         updated = true;
       }
