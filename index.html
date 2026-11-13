@@ -1967,8 +1967,24 @@
     function isBigOceanPOB(card) {
       const ver = (card.version || '').toLowerCase();
       const note = (card.notes || '').trim();
-      // Treat as a POB if version explicitly mentions POB/benefit/pre-order OR if a specific note tag (like "Bunny" or "Chopsticks") is assigned
+      const isOT3 = /\bot3\b|group|all\s*members|unit/.test(`${(card.member || '').toLowerCase()} ${ver} ${note.toLowerCase()}`);
+      if (isOT3) return false;
+      const isExplicitRegular = /\b(album|photocard|pc|selfie|concept|ver\b|version)\b/.test(ver) && !/\bpob\b|pre[-\s]?order|benefit/.test(ver);
+      if (isExplicitRegular) return false;
       return /\bpob\b|pre[-\s]?order|benefit/.test(ver) || note.length > 0;
+    }
+
+    function isBigOceanOT3(card) {
+      const combined = `${(card.member || '').toLowerCase()} ${(card.version || '').toLowerCase()} ${(card.notes || '').toLowerCase()}`;
+      return /\bot3\b|group|all\s*members/.test(combined);
+    }
+
+    function getBigOceanCardCategoryRank(card) {
+      // Order within The Greatest Battle (and Big Ocean eras):
+      // 0: OT3 album photocards -> 1: Individual album photocards (Chanyeon, PJ, Jiseok) -> 2: POBs
+      if (isBigOceanPOB(card)) return 2;
+      if (isBigOceanOT3(card)) return 0;
+      return 1;
     }
 
     function getBigOceanSubgroupKey(card) {
@@ -1984,14 +2000,17 @@
       const groupA = (a.group || '').trim().toLowerCase();
       const groupB = (b.group || '').trim().toLowerCase();
 
-      // For Big Ocean, keep standard photocards as-is (sorted Chanyeon, PJ, Jiseok) and group POBs by matching notes (e.g. "Bunny", "Chopsticks")
       if (groupA === 'big ocean' && groupB === 'big ocean') {
-        const subA = getBigOceanSubgroupKey(a);
-        const subB = getBigOceanSubgroupKey(b);
-        if (subA !== subB) {
-          if (!subA) return -1; // Regular photocards first, followed by grouped POB sets
-          if (!subB) return 1;
-          return subA.localeCompare(subB);
+        const catA = getBigOceanCardCategoryRank(a);
+        const catB = getBigOceanCardCategoryRank(b);
+        if (catA !== catB) return catA - catB;
+
+        if (catA === 2) {
+          const subA = getBigOceanSubgroupKey(a);
+          const subB = getBigOceanSubgroupKey(b);
+          if (subA !== subB) {
+            return subA.localeCompare(subB);
+          }
         }
       }
 
@@ -2007,6 +2026,12 @@
       if (copy.album && /do\s*it\s*\/\s*music\s*kor[a-z]*/i.test(copy.album)) {
         if (copy.album !== 'Do It / Music Korea') {
           copy.album = 'Do It / Music Korea';
+          updated = true;
+        }
+      }
+      if (copy.album && /^(the\s+)?greates(t)?\s+battle$/i.test(copy.album.trim())) {
+        if (copy.album !== 'The Greatest Battle') {
+          copy.album = 'The Greatest Battle';
           updated = true;
         }
       }
@@ -2291,10 +2316,41 @@
         eraMap.get(key).cards.push(card);
       });
 
+      const ALBUM_RELEASE_ORDER = {
+        'the greatest battle': 1,
+        'greatest battle': 1,
+        'underwater': 2,
+        'under water': 2,
+        'bucket hat': 3,
+        'blow': 4,
+        'glow': 5,
+        'follow': 6
+      };
+
+      function getAlbumReleaseRank(albumName) {
+        const a = (albumName || '').trim().toLowerCase();
+        if (a in ALBUM_RELEASE_ORDER) return ALBUM_RELEASE_ORDER[a];
+        for (const key of Object.keys(ALBUM_RELEASE_ORDER)) {
+          if (a.includes(key)) return ALBUM_RELEASE_ORDER[key];
+        }
+        return 50;
+      }
+
+      const sortedEras = Array.from(eraMap.values()).sort((a, b) => {
+        const rankA = getAlbumReleaseRank(a.album);
+        const rankB = getAlbumReleaseRank(b.album);
+        if (rankA !== rankB) return rankA - rankB;
+        // For other albums not in the explicit chronological list, put the one with the newest added card first
+        const maxCreatedA = Math.max(...a.cards.map(c => Number(c.createdAt) || 0));
+        const maxCreatedB = Math.max(...b.cards.map(c => Number(c.createdAt) || 0));
+        if (maxCreatedB !== maxCreatedA) return maxCreatedB - maxCreatedA;
+        return (a.album || '').localeCompare(b.album || '');
+      });
+
       let html = '';
       let index = 0;
 
-      eraMap.forEach((eraData) => {
+      sortedEras.forEach((eraData) => {
         index++;
         const shelfId = 'era_shelf_' + index;
         const eraCards = eraData.cards;
