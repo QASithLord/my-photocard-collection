@@ -346,6 +346,7 @@
           </div>
 
           <select id="sortSelect" class="py-2 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 cursor-pointer">
+            <option value="age">Member Order (Oldest → Youngest)</option>
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
             <option value="member">Idol / Member (A-Z)</option>
@@ -362,7 +363,7 @@
     <!-- Cards Display Container -->
     <section id="cardsDisplaySection">
       <div id="eraRowsContainer" class="space-y-6"></div>
-      <div id="cardsGrid" class="hidden grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4"></div>
+      <div id="cardsGrid" class="hidden grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-3"></div>
 
       <!-- Empty State -->
       <div id="emptyState" class="hidden py-16 text-center max-w-sm mx-auto">
@@ -681,7 +682,7 @@
     let currentTradeFilter = 'all';
     let currentTradeGroupFilter = 'all';
     let currentSearchTerm = '';
-    let currentSort = 'newest';
+    let currentSort = 'age';
     let currentViewMode = 'eras';
 
     let fbApp = null;
@@ -873,11 +874,22 @@
           cloudCards.push({ id: doc.id, ...doc.data() });
         });
 
-        cards = cloudCards;
+        const normalizedList = [];
+        const toFixInCloud = [];
+        cloudCards.forEach(rawCard => {
+          const { card: fixedCard, updated } = normalizeCardData(rawCard);
+          normalizedList.push(fixedCard);
+          if (updated && !isReadOnly) {
+            toFixInCloud.push(fixedCard);
+          }
+        });
+
+        cards = normalizedList;
         ensureValidActiveGroup();
         if (!isReadOnly) {
           saveLocalCollection(cards);
           updateAuthUI();
+          toFixInCloud.forEach(c => saveCardToFirestore(c).catch(() => {}));
         }
         renderApp();
       }, (error) => {
@@ -1092,6 +1104,8 @@
     window.addEventListener('DOMContentLoaded', async () => {
       initTheme();
       await loadCollection();
+      cards = cards.map(c => normalizeCardData(c).card);
+      await saveLocalCollection(cards);
       ensureValidActiveGroup();
       setupEventListeners();
       initFirebase();
@@ -1924,6 +1938,55 @@
       albumList.innerHTML = albums.map(a => `<option value="${escapeAttr(a)}">`).join('');
     }
 
+    const MEMBER_AGE_ORDER = {
+      'stray kids': ['bang chan', 'bang chhan', 'lee know', 'changbin', 'hyunjin', 'han', 'felix', 'seungmin', 'i.n', 'in'],
+      'ateez': ['seonghwa', 'hongjoong', 'yunho', 'yeosang', 'san', 'mingi', 'wooyoung', 'jongho'],
+      'big ocean': ['hyunjin', 'chanyeon', 'jiseok'],
+      '8turn': ['jaeyun', 'myungho', 'minho', 'yoonseong', 'haemin', 'kyungmin', 'yungyu', 'seungheon'],
+      'boynextdoor': ['sungho', 'riwoo', 'jaehyun', 'taesan', 'leehan', 'woonhak'],
+      'xodiac': ['hyunsik', 'zayyan', 'lex', 'beomsoo', 'gyumin', 'wain', 'sing', 'davin', 'leo']
+    };
+
+    function getMemberAgeRank(groupName, memberName) {
+      const g = (groupName || '').trim().toLowerCase();
+      const m = (memberName || '').trim().toLowerCase();
+      const list = MEMBER_AGE_ORDER[g];
+      if (list) {
+        const idx = list.indexOf(m);
+        if (idx !== -1) return idx;
+      }
+      for (const key of Object.keys(MEMBER_AGE_ORDER)) {
+        if (g.includes(key) || key.includes(g)) {
+          const idx = MEMBER_AGE_ORDER[key].indexOf(m);
+          if (idx !== -1) return idx;
+        }
+      }
+      return 999;
+    }
+
+    function compareMembersByAge(a, b) {
+      const rankA = getMemberAgeRank(a.group, a.member);
+      const rankB = getMemberAgeRank(b.group, b.member);
+      if (rankA !== rankB) return rankA - rankB;
+      return (a.member || '').localeCompare(b.member || '');
+    }
+
+    function normalizeCardData(card) {
+      let updated = false;
+      const copy = { ...card };
+      if (copy.album && /do\s*it\s*\/\s*music\s*kor[a-z]*/i.test(copy.album)) {
+        if (copy.album !== 'Do It / Music Korea') {
+          copy.album = 'Do It / Music Korea';
+          updated = true;
+        }
+      }
+      if (copy.member && /^bang\s*chhan$/i.test(copy.member.trim())) {
+        copy.member = 'Bang Chan';
+        updated = true;
+      }
+      return { card: copy, updated };
+    }
+
     function getFilteredCards() {
       return getScopedGroupCards().filter(card => {
         if (currentFilterGroup === 'trades') {
@@ -1947,6 +2010,7 @@
         }
         return true;
       }).sort((a, b) => {
+        if (currentSort === 'age') return compareMembersByAge(a, b);
         if (currentSort === 'newest') return (b.createdAt || 0) - (a.createdAt || 0);
         if (currentSort === 'oldest') return (a.createdAt || 0) - (b.createdAt || 0);
         if (currentSort === 'member') return (a.member || '').localeCompare(b.member || '');
@@ -2017,12 +2081,12 @@
             ` : ''}
           </div>
 
-          <div class="p-3 flex-1 flex flex-col justify-between">
+          <div class="p-2.5 flex-1 flex flex-col justify-between">
             <div>
               <div class="flex items-center justify-between gap-1 mb-0.5">
                 <span class="text-[11px] font-semibold tracking-wider uppercase text-brand-600 dark:text-brand-400 truncate">${escapeHtml(card.group)}</span>
               </div>
-              <h4 class="font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-tight truncate" title="${escapeAttr(card.member)}">${escapeHtml(card.member)}</h4>
+              <h4 class="font-bold text-slate-900 dark:text-white text-xs sm:text-sm leading-tight truncate" title="${escapeAttr(card.member)}">${escapeHtml(card.member)}</h4>
               
               ${card.album ? `
                 <p class="text-[11px] text-slate-600 dark:text-slate-300 truncate mt-0.5" title="${escapeAttr(card.album)}">
@@ -2189,7 +2253,7 @@
               </div>
             </div>
 
-            <div id="${shelfId}" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 transition-all">
+            <div id="${shelfId}" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-3 transition-all">
               ${eraCards.map(card => createCardHTML(card)).join('')}
             </div>
           </div>
