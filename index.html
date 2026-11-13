@@ -1964,25 +1964,33 @@
       return 999;
     }
 
+    function isBigOceanPOB(card) {
+      const ver = (card.version || '').toLowerCase();
+      const note = (card.notes || '').trim();
+      // Treat as a POB if version explicitly mentions POB/benefit/pre-order OR if a specific note tag (like "Bunny" or "Chopsticks") is assigned
+      return /\bpob\b|pre[-\s]?order|benefit/.test(ver) || note.length > 0;
+    }
+
     function getBigOceanSubgroupKey(card) {
+      if (!isBigOceanPOB(card)) return '';
       const note = (card.notes || '').trim();
       if (note) return note.toLowerCase();
       const ver = (card.version || '').trim();
       if (ver) return ver.toLowerCase();
-      return '';
+      return 'pob';
     }
 
     function compareMembersByAge(a, b) {
       const groupA = (a.group || '').trim().toLowerCase();
       const groupB = (b.group || '').trim().toLowerCase();
 
-      // For Big Ocean, group POBs/cards sharing the same note (e.g. "Chopsticks") together, ordered Chanyeon, PJ, Jiseok
+      // For Big Ocean, keep standard photocards as-is (sorted Chanyeon, PJ, Jiseok) and group POBs by matching notes (e.g. "Bunny", "Chopsticks")
       if (groupA === 'big ocean' && groupB === 'big ocean') {
         const subA = getBigOceanSubgroupKey(a);
         const subB = getBigOceanSubgroupKey(b);
         if (subA !== subB) {
-          if (!subA) return 1;
-          if (!subB) return -1;
+          if (!subA) return -1; // Regular photocards first, followed by grouped POB sets
+          if (!subB) return 1;
           return subA.localeCompare(subB);
         }
       }
@@ -2180,35 +2188,42 @@
         `;
       }
 
-      // For Big Ocean, group POBs/cards that share the same note (e.g. "Chopsticks") into neat labeled sets ordered Chanyeon, PJ, Jiseok
-      const noteGroups = new Map();
+      // Keep regular photocards as they are (ordered Chanyeon, PJ, Jiseok), and group POBs by matching notes (e.g. "Bunny", "Chopsticks")
+      const regularCards = [];
+      const pobNoteGroups = new Map();
+
       eraData.cards.forEach(card => {
-        const label = (card.notes || '').trim() || 'Album / General';
-        const key = label.toLowerCase();
-        if (!noteGroups.has(key)) {
-          noteGroups.set(key, { label, cards: [] });
+        if (!isBigOceanPOB(card)) {
+          regularCards.push(card);
+        } else {
+          const label = (card.notes || '').trim() || (card.version || '').trim() || 'POB';
+          const key = label.toLowerCase();
+          if (!pobNoteGroups.has(key)) {
+            pobNoteGroups.set(key, { label, cards: [] });
+          }
+          pobNoteGroups.get(key).cards.push(card);
         }
-        noteGroups.get(key).cards.push(card);
       });
 
-      // If there's only one group or no distinct notes, render standard grid (already sorted Chanyeon, PJ, Jiseok)
-      if (noteGroups.size <= 1) {
-        return `
+      let subHtml = '';
+
+      if (regularCards.length > 0) {
+        const sortedRegular = [...regularCards].sort(compareMembersByAge);
+        subHtml += `
           <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-3">
-            ${eraData.cards.map(card => createCardHTML(card)).join('')}
+            ${sortedRegular.map(card => createCardHTML(card)).join('')}
           </div>
         `;
       }
 
-      let subHtml = '';
-      noteGroups.forEach(groupObj => {
+      pobNoteGroups.forEach(groupObj => {
         const sortedSubCards = [...groupObj.cards].sort(compareMembersByAge);
         subHtml += `
-          <div class="space-y-2">
+          <div class="space-y-2 ${regularCards.length > 0 ? 'pt-2 border-t border-slate-100 dark:border-slate-800/80' : ''}">
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-800/60">
                 <i class="ph-bold ph-tag text-xs"></i>
-                ${escapeHtml(groupObj.label)}
+                POB: ${escapeHtml(groupObj.label)}
               </span>
               <span class="text-[11px] text-slate-400 dark:text-slate-500 font-medium">${sortedSubCards.length} card${sortedSubCards.length > 1 ? 's' : ''}</span>
             </div>
@@ -2218,6 +2233,7 @@
           </div>
         `;
       });
+
       return subHtml;
     }
 
