@@ -1941,7 +1941,7 @@
     const MEMBER_AGE_ORDER = {
       'stray kids': ['bang chan', 'bang chhan', 'lee know', 'changbin', 'hyunjin', 'han', 'felix', 'seungmin', 'i.n', 'in'],
       'ateez': ['seonghwa', 'hongjoong', 'yunho', 'yeosang', 'san', 'mingi', 'wooyoung', 'jongho'],
-      'big ocean': ['hyunjin', 'chanyeon', 'jiseok'],
+      'big ocean': ['chanyeon', 'pj', 'hyunjin', 'jiseok'],
       '8turn': ['jaeyun', 'myungho', 'minho', 'yoonseong', 'haemin', 'kyungmin', 'yungyu', 'seungheon'],
       'boynextdoor': ['sungho', 'riwoo', 'jaehyun', 'taesan', 'leehan', 'woonhak'],
       'xodiac': ['hyunsik', 'zayyan', 'lex', 'beomsoo', 'gyumin', 'wain', 'sing', 'davin', 'leo']
@@ -1964,7 +1964,29 @@
       return 999;
     }
 
+    function getBigOceanSubgroupKey(card) {
+      const note = (card.notes || '').trim();
+      if (note) return note.toLowerCase();
+      const ver = (card.version || '').trim();
+      if (ver) return ver.toLowerCase();
+      return '';
+    }
+
     function compareMembersByAge(a, b) {
+      const groupA = (a.group || '').trim().toLowerCase();
+      const groupB = (b.group || '').trim().toLowerCase();
+
+      // For Big Ocean, group POBs/cards sharing the same note (e.g. "Chopsticks") together, ordered Chanyeon, PJ, Jiseok
+      if (groupA === 'big ocean' && groupB === 'big ocean') {
+        const subA = getBigOceanSubgroupKey(a);
+        const subB = getBigOceanSubgroupKey(b);
+        if (subA !== subB) {
+          if (!subA) return 1;
+          if (!subB) return -1;
+          return subA.localeCompare(subB);
+        }
+      }
+
       const rankA = getMemberAgeRank(a.group, a.member);
       const rankB = getMemberAgeRank(b.group, b.member);
       if (rankA !== rankB) return rankA - rankB;
@@ -2148,6 +2170,57 @@
       `;
     }
 
+    function renderEraShelfContent(eraData) {
+      const isBigOcean = (eraData.group || '').trim().toLowerCase() === 'big ocean';
+      if (!isBigOcean) {
+        return `
+          <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-3">
+            ${eraData.cards.map(card => createCardHTML(card)).join('')}
+          </div>
+        `;
+      }
+
+      // For Big Ocean, group POBs/cards that share the same note (e.g. "Chopsticks") into neat labeled sets ordered Chanyeon, PJ, Jiseok
+      const noteGroups = new Map();
+      eraData.cards.forEach(card => {
+        const label = (card.notes || '').trim() || 'Album / General';
+        const key = label.toLowerCase();
+        if (!noteGroups.has(key)) {
+          noteGroups.set(key, { label, cards: [] });
+        }
+        noteGroups.get(key).cards.push(card);
+      });
+
+      // If there's only one group or no distinct notes, render standard grid (already sorted Chanyeon, PJ, Jiseok)
+      if (noteGroups.size <= 1) {
+        return `
+          <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-3">
+            ${eraData.cards.map(card => createCardHTML(card)).join('')}
+          </div>
+        `;
+      }
+
+      let subHtml = '';
+      noteGroups.forEach(groupObj => {
+        const sortedSubCards = [...groupObj.cards].sort(compareMembersByAge);
+        subHtml += `
+          <div class="space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-800/60">
+                <i class="ph-bold ph-tag text-xs"></i>
+                ${escapeHtml(groupObj.label)}
+              </span>
+              <span class="text-[11px] text-slate-400 dark:text-slate-500 font-medium">${sortedSubCards.length} card${sortedSubCards.length > 1 ? 's' : ''}</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-3">
+              ${sortedSubCards.map(card => createCardHTML(card)).join('')}
+            </div>
+          </div>
+        `;
+      });
+      return subHtml;
+    }
+
     function renderCards() {
       const rowsContainer = document.getElementById('eraRowsContainer');
       const gridContainer = document.getElementById('cardsGrid');
@@ -2253,8 +2326,8 @@
               </div>
             </div>
 
-            <div id="${shelfId}" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-3 transition-all">
-              ${eraCards.map(card => createCardHTML(card)).join('')}
+            <div id="${shelfId}" class="space-y-4 transition-all">
+              ${renderEraShelfContent(eraData)}
             </div>
           </div>
         `;
