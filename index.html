@@ -161,9 +161,44 @@
       <div id="groupTabsBar" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1.5 overflow-x-auto py-2 custom-scrollbar text-xs sm:text-sm font-semibold"></div>
     </div>
 
-    <!-- Secondary Bias Navigation Row (Underneath All Groups Row) -->
+    <!-- Secondary Bias Filter Row (Underneath All Groups Row — Type-to-Complete + Dropdown) -->
     <div id="biasTabsSection" class="bg-pink-50/60 dark:bg-slate-900/95 border-t border-slate-200/70 dark:border-slate-800/70">
-      <div id="biasTabsBar" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1.5 overflow-x-auto py-1.5 custom-scrollbar text-xs font-semibold"></div>
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center gap-2 text-xs">
+        <span id="biasBarLabel" class="text-[11px] font-bold uppercase tracking-wider text-brand-700 dark:text-brand-300 flex items-center gap-1 whitespace-nowrap">
+          <i class="ph-fill ph-heart text-brand-500"></i> Bias Filter:
+        </span>
+
+        <!-- Type-to-complete Bias Search Input -->
+        <div class="relative w-44 sm:w-52">
+          <i class="ph-bold ph-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+          <input
+            type="text"
+            id="biasSearchInput"
+            list="biasDatalist"
+            placeholder="Type bias (e.g. Hyunjin)..."
+            autocomplete="off"
+            class="w-full pl-7 pr-7 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50 text-xs font-medium"
+          >
+          <datalist id="biasDatalist"></datalist>
+          <button type="button" id="clearBiasBtn" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" title="Clear Bias Filter">
+            <i class="ph-bold ph-x-circle text-sm"></i>
+          </button>
+        </div>
+
+        <!-- Dropdown Selector for All Members / Biases -->
+        <select id="biasSelectDropdown" aria-label="Select Bias" class="py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/50 cursor-pointer max-w-[210px]">
+          <option value="all">All Members</option>
+        </select>
+
+        <!-- Pin / Favorite Active Bias Button -->
+        <button type="button" id="togglePinActiveBiasBtn" class="hidden inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition active:scale-95" title="Pin or Unpin this Bias">
+          <i id="togglePinActiveBiasIcon" class="ph-bold ph-heart text-xs"></i>
+          <span id="togglePinActiveBiasText">Pin Bias</span>
+        </button>
+
+        <!-- Pinned Biases Quick Shortcuts (only shows pinned biases, no horizontal scroll needed) -->
+        <div id="pinnedBiasChips" class="flex items-center gap-1.5 flex-wrap"></div>
+      </div>
     </div>
   </header>
 
@@ -1185,16 +1220,84 @@
         selectGroupTab(favoriteGroup || 'all');
       });
 
-      document.getElementById('biasTabsBar').addEventListener('click', (e) => {
-        const pinBtn = e.target.closest('[data-pin-bias]');
-        if (pinBtn) {
-          e.stopPropagation();
-          toggleFavoriteBias(pinBtn.getAttribute('data-pin-bias'));
+      const biasSearchInput = document.getElementById('biasSearchInput');
+      const biasSelectDropdown = document.getElementById('biasSelectDropdown');
+      const clearBiasBtn = document.getElementById('clearBiasBtn');
+      const togglePinActiveBiasBtn = document.getElementById('togglePinActiveBiasBtn');
+
+      biasSelectDropdown.addEventListener('change', (e) => {
+        selectBiasTab(e.target.value);
+      });
+
+      biasSearchInput.addEventListener('input', (e) => {
+        const val = e.target.value.trim();
+        if (!val) {
+          if (currentFilterBias !== 'all') {
+            selectBiasTab('all');
+          } else {
+            clearBiasBtn.classList.add('hidden');
+          }
           return;
         }
-        const biasBtn = e.target.closest('[data-select-bias]');
-        if (biasBtn) {
-          selectBiasTab(biasBtn.getAttribute('data-select-bias'));
+        clearBiasBtn.classList.remove('hidden');
+
+        // Match exact or unique case-insensitive member name from current group scope
+        const groupScopedCards = (currentFilterGroup !== 'all' && currentFilterGroup !== 'trades')
+          ? cards.filter(c => (c.group || '').toLowerCase() === currentFilterGroup.toLowerCase())
+          : cards;
+        const distinctMembers = Array.from(new Set(groupScopedCards.map(c => (c.member || '').trim()).filter(Boolean)));
+
+        const exactMatch = distinctMembers.find(m => m.toLowerCase() === val.toLowerCase());
+        if (exactMatch) {
+          selectBiasTab(exactMatch);
+          return;
+        }
+
+        // If typing uniquely narrows down to 1 member (e.g., typing "Min" -> "Mingi"), select automatically
+        const prefixMatches = distinctMembers.filter(m => m.toLowerCase().startsWith(val.toLowerCase()));
+        if (prefixMatches.length === 1 && val.length >= 2) {
+          selectBiasTab(prefixMatches[0]);
+        }
+      });
+
+      biasSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const val = biasSearchInput.value.trim();
+          if (!val) {
+            selectBiasTab('all');
+            return;
+          }
+          const groupScopedCards = (currentFilterGroup !== 'all' && currentFilterGroup !== 'trades')
+            ? cards.filter(c => (c.group || '').toLowerCase() === currentFilterGroup.toLowerCase())
+            : cards;
+          const distinctMembers = Array.from(new Set(groupScopedCards.map(c => (c.member || '').trim()).filter(Boolean)));
+          const match = distinctMembers.find(m => m.toLowerCase() === val.toLowerCase())
+            || distinctMembers.find(m => m.toLowerCase().startsWith(val.toLowerCase()))
+            || distinctMembers.find(m => m.toLowerCase().includes(val.toLowerCase()));
+          if (match) {
+            biasSearchInput.value = match;
+            selectBiasTab(match);
+          }
+        }
+      });
+
+      clearBiasBtn.addEventListener('click', () => {
+        biasSearchInput.value = '';
+        selectBiasTab('all');
+      });
+
+      togglePinActiveBiasBtn.addEventListener('click', () => {
+        if (currentFilterBias !== 'all') {
+          toggleFavoriteBias(currentFilterBias);
+        }
+      });
+
+      document.getElementById('pinnedBiasChips').addEventListener('click', (e) => {
+        const chipBtn = e.target.closest('[data-select-bias]');
+        if (chipBtn) {
+          const targetBias = chipBtn.getAttribute('data-select-bias');
+          selectBiasTab(currentFilterBias.toLowerCase() === targetBias.toLowerCase() ? 'all' : targetBias);
         }
       });
 
@@ -1809,11 +1912,19 @@
     }
 
     function renderBiasTabsBar() {
-      const container = document.getElementById('biasTabsBar');
       const section = document.getElementById('biasTabsSection');
-      if (!container || !section) return;
+      const labelEl = document.getElementById('biasBarLabel');
+      const datalistEl = document.getElementById('biasDatalist');
+      const dropdownEl = document.getElementById('biasSelectDropdown');
+      const searchInputEl = document.getElementById('biasSearchInput');
+      const clearBtnEl = document.getElementById('clearBiasBtn');
+      const pinBtnEl = document.getElementById('togglePinActiveBiasBtn');
+      const pinIconEl = document.getElementById('togglePinActiveBiasIcon');
+      const pinTextEl = document.getElementById('togglePinActiveBiasText');
+      const pinnedChipsEl = document.getElementById('pinnedBiasChips');
 
-      // Scope available bias chips to the currently selected group (or all groups if on 'all' / 'trades')
+      if (!section || !dropdownEl || !datalistEl) return;
+
       const groupScopedCards = (currentFilterGroup !== 'all' && currentFilterGroup !== 'trades')
         ? cards.filter(c => (c.group || '').toLowerCase() === currentFilterGroup.toLowerCase())
         : cards;
@@ -1823,7 +1934,6 @@
         const bFav = favoriteBiases.some(f => f.toLowerCase() === b.toLowerCase());
         if (aFav && !bFav) return -1;
         if (!aFav && bFav) return 1;
-        // Also respect age rank if within a single group
         if (currentFilterGroup !== 'all' && currentFilterGroup !== 'trades') {
           const rankA = getMemberAgeRank(currentFilterGroup, a);
           const rankB = getMemberAgeRank(currentFilterGroup, b);
@@ -1838,45 +1948,69 @@
       }
       section.classList.remove('hidden');
 
-      // If the active bias isn't in the newly selected group, reset bias filter to 'all'
       if (currentFilterBias !== 'all' && !biases.some(b => b.toLowerCase() === currentFilterBias.toLowerCase())) {
         currentFilterBias = 'all';
       }
 
-      const isAllBiasActive = currentFilterBias === 'all';
       const labelText = currentFilterGroup !== 'all' && currentFilterGroup !== 'trades'
         ? `${currentFilterGroup} Bias:`
-        : 'All Biases:';
+        : 'Bias Filter:';
+      labelEl.innerHTML = `<i class="ph-fill ph-heart text-brand-500"></i> ${escapeHtml(labelText)}`;
 
-      let html = `
-        <span class="text-[11px] font-bold uppercase tracking-wider text-brand-700 dark:text-brand-300 mr-1 flex items-center gap-1 whitespace-nowrap">
-          <i class="ph-fill ph-heart text-brand-500"></i> ${escapeHtml(labelText)}
-        </span>
-        <button type="button" data-select-bias="all" class="flex items-center gap-1 px-3 py-1 rounded-xl transition whitespace-nowrap ${isAllBiasActive ? 'bg-brand-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700'}">
-          <span>All Members</span>
-          <span class="opacity-80 text-[10px]">(${groupScopedCards.length})</span>
-        </button>
-      `;
+      // Populate type-to-complete datalist
+      datalistEl.innerHTML = biases.map(bias => `<option value="${escapeAttr(bias)}">`).join('');
 
+      // Populate dropdown menu
+      let optionsHtml = `<option value="all">All Members (${groupScopedCards.length})</option>`;
       biases.forEach(bias => {
         const count = groupScopedCards.filter(c => (c.member || '').trim().toLowerCase() === bias.toLowerCase()).length;
-        const isSelected = currentFilterBias.toLowerCase() === bias.toLowerCase();
         const isPinned = favoriteBiases.some(f => f.toLowerCase() === bias.toLowerCase());
-
-        html += `
-          <div class="inline-flex items-center rounded-xl transition whitespace-nowrap ${isSelected ? 'bg-pink-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-pink-50 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700'}">
-            <button type="button" data-select-bias="${escapeAttr(bias)}" class="flex items-center gap-1 pl-2.5 pr-1 py-1">
-              <span>${escapeHtml(bias)}</span>
-              <span class="opacity-80 text-[10px] font-normal">(${count})</span>
-            </button>
-            <button type="button" data-pin-bias="${escapeAttr(bias)}" class="pr-2 pl-0.5 py-1 hover:scale-110 transition-transform" title="${isPinned ? 'Unpin Bias' : 'Pin Bias to front'}">
-              <i class="${isPinned ? 'ph-fill ph-heart text-rose-400' : 'ph-bold ph-heart opacity-50 hover:opacity-100'} text-[11px]"></i>
-            </button>
-          </div>
-        `;
+        const selectedAttr = currentFilterBias.toLowerCase() === bias.toLowerCase() ? 'selected' : '';
+        optionsHtml += `<option value="${escapeAttr(bias)}" ${selectedAttr}>${isPinned ? '♥ ' : ''}${escapeHtml(bias)} (${count})</option>`;
       });
+      dropdownEl.innerHTML = optionsHtml;
 
-      container.innerHTML = html;
+      // Sync search input and clear/pin buttons with active bias
+      if (currentFilterBias === 'all') {
+        if (document.activeElement !== searchInputEl) {
+          searchInputEl.value = '';
+        }
+        clearBtnEl.classList.toggle('hidden', !searchInputEl.value.trim());
+        pinBtnEl.classList.add('hidden');
+      } else {
+        searchInputEl.value = currentFilterBias;
+        clearBtnEl.classList.remove('hidden');
+        pinBtnEl.classList.remove('hidden');
+
+        const isPinned = favoriteBiases.some(f => f.toLowerCase() === currentFilterBias.toLowerCase());
+        if (isPinned) {
+          pinBtnEl.className = 'inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-pink-300 dark:border-pink-700 bg-pink-100/80 dark:bg-pink-950/50 text-pink-800 dark:text-pink-200 text-xs font-semibold transition active:scale-95';
+          pinIconEl.className = 'ph-fill ph-heart text-pink-600 dark:text-pink-400 text-xs';
+          pinTextEl.textContent = 'Pinned Bias';
+        } else {
+          pinBtnEl.className = 'inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-pink-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition active:scale-95';
+          pinIconEl.className = 'ph-bold ph-heart text-xs';
+          pinTextEl.textContent = 'Pin Bias';
+        }
+      }
+
+      // Render quick-click chips ONLY for pinned favorite biases so there is no horizontal scroll clutter
+      const visiblePinned = biases.filter(b => favoriteBiases.some(f => f.toLowerCase() === b.toLowerCase()));
+      if (visiblePinned.length > 0) {
+        pinnedChipsEl.innerHTML = visiblePinned.map(bias => {
+          const count = groupScopedCards.filter(c => (c.member || '').trim().toLowerCase() === bias.toLowerCase()).length;
+          const isSelected = currentFilterBias.toLowerCase() === bias.toLowerCase();
+          return `
+            <button type="button" data-select-bias="${escapeAttr(bias)}" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold transition ${isSelected ? 'bg-pink-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-pink-100/70 dark:hover:bg-slate-700 border border-pink-200/80 dark:border-slate-700'}">
+              <i class="ph-fill ph-heart ${isSelected ? 'text-white' : 'text-pink-500'} text-[11px]"></i>
+              <span>${escapeHtml(bias)}</span>
+              <span class="opacity-80 text-[10px]">(${count})</span>
+            </button>
+          `;
+        }).join('');
+      } else {
+        pinnedChipsEl.innerHTML = '';
+      }
     }
 
     function renderGroupTabsBar() {
