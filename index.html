@@ -2018,6 +2018,20 @@
         }
       }
 
+      if (groupA === 'ateez' && groupB === 'ateez') {
+        const albumA = (a.album || '').trim().toLowerCase();
+        const albumB = (b.album || '').trim().toLowerCase();
+        if (albumA !== albumB) return albumA.localeCompare(albumB);
+
+        const verA = (a.version || '').trim().toLowerCase();
+        const verB = (b.version || '').trim().toLowerCase();
+        if (verA !== verB) {
+          if (!verA) return 1;
+          if (!verB) return -1;
+          return verA.localeCompare(verB);
+        }
+      }
+
       const rankA = getMemberAgeRank(a.group, a.member);
       const rankB = getMemberAgeRank(b.group, b.member);
       if (rankA !== rankB) return rankA - rankB;
@@ -2202,7 +2216,55 @@
     }
 
     function renderEraShelfContent(eraData) {
-      const isBigOcean = (eraData.group || '').trim().toLowerCase() === 'big ocean';
+      const groupLower = (eraData.group || '').trim().toLowerCase();
+      const isAteez = groupLower === 'ateez';
+      const isBigOcean = groupLower === 'big ocean';
+
+      if (isAteez) {
+        // Group ATEEZ cards within each album/era by Version / Type so each Version/Type (e.g. "Poca Photocard / Image A Version") is its own row
+        const versionGroups = new Map();
+        eraData.cards.forEach(card => {
+          const verLabel = (card.version || '').trim() || 'Standard / Unspecified Version';
+          const key = verLabel.toLowerCase();
+          if (!versionGroups.has(key)) {
+            versionGroups.set(key, { label: verLabel, cards: [] });
+          }
+          versionGroups.get(key).cards.push(card);
+        });
+
+        let subHtml = '';
+        let rowIdx = 0;
+        versionGroups.forEach(groupObj => {
+          const sortedRowCards = [...groupObj.cards].sort((a, b) => {
+            const rankA = getMemberAgeRank(a.group, a.member);
+            const rankB = getMemberAgeRank(b.group, b.member);
+            if (rankA !== rankB) return rankA - rankB;
+            return (a.member || '').localeCompare(b.member || '');
+          });
+          const ownedInRow = sortedRowCards.filter(c => c.status === 'have').length;
+          const rowHeaderTitle = `${eraData.album} / ${groupObj.label}`;
+
+          subHtml += `
+            <div class="space-y-2 ${rowIdx > 0 ? 'pt-3 border-t border-slate-100 dark:border-slate-800/80' : ''}">
+              <div class="flex items-center justify-between gap-2 flex-wrap">
+                <div class="flex items-center gap-2">
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-bold bg-brand-50 dark:bg-brand-950/50 text-brand-700 dark:text-brand-300 border border-brand-200/70 dark:border-brand-800/60">
+                    <i class="ph-bold ph-layers text-xs"></i>
+                    ${escapeHtml(rowHeaderTitle)}
+                  </span>
+                  <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">${ownedInRow} / ${sortedRowCards.length} owned</span>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-3">
+                ${sortedRowCards.map(card => createCardHTML(card)).join('')}
+              </div>
+            </div>
+          `;
+          rowIdx++;
+        });
+        return subHtml;
+      }
+
       if (!isBigOcean) {
         return `
           <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 sm:gap-3">
