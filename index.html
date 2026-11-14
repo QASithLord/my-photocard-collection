@@ -160,6 +160,11 @@
     <div class="bg-slate-100/80 dark:bg-slate-950/70 border-t border-slate-200/80 dark:border-slate-800/80">
       <div id="groupTabsBar" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1.5 overflow-x-auto py-2 custom-scrollbar text-xs sm:text-sm font-semibold"></div>
     </div>
+
+    <!-- Secondary Bias Navigation Row (Underneath All Groups Row) -->
+    <div id="biasTabsSection" class="bg-pink-50/60 dark:bg-slate-900/95 border-t border-slate-200/70 dark:border-slate-800/70">
+      <div id="biasTabsBar" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1.5 overflow-x-auto py-1.5 custom-scrollbar text-xs font-semibold"></div>
+    </div>
   </header>
 
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -670,12 +675,20 @@
     const STORAGE_KEY = 'pocatrack_collection_v1';
     const FIREBASE_CONFIG_KEY = 'pocatrack_firebase_config_v1';
     const FAVORITE_GROUP_KEY = 'pocatrack_favorite_group_v1';
+    const FAVORITE_BIASES_KEY = 'pocatrack_favorite_biases_v1';
 
     let cards = [];
     let localBackupCards = [];
 
     let favoriteGroup = localStorage.getItem(FAVORITE_GROUP_KEY) || '';
+    let favoriteBiases = [];
+    try {
+      const savedBiases = JSON.parse(localStorage.getItem(FAVORITE_BIASES_KEY) || '[]');
+      if (Array.isArray(savedBiases)) favoriteBiases = savedBiases;
+    } catch { favoriteBiases = []; }
+
     let currentFilterGroup = favoriteGroup || 'all';
+    let currentFilterBias = 'all'; // 'all' or specific member/bias name (e.g. 'Hyunjin', 'Mingi')
     let initialRouteApplied = false;
 
     let currentFilterStatus = 'all';
@@ -1083,6 +1096,38 @@
       }
     }
 
+    function getAllBiasesSorted() {
+      const members = Array.from(new Set(cards.map(c => (c.member || '').trim()).filter(Boolean)));
+      return members.sort((a, b) => {
+        const aFav = favoriteBiases.some(f => f.toLowerCase() === a.toLowerCase());
+        const bFav = favoriteBiases.some(f => f.toLowerCase() === b.toLowerCase());
+        if (aFav && !bFav) return -1;
+        if (!aFav && bFav) return 1;
+        return a.localeCompare(b);
+      });
+    }
+
+    function toggleFavoriteBias(memberName) {
+      const idx = favoriteBiases.findIndex(b => b.toLowerCase() === memberName.toLowerCase());
+      if (idx !== -1) {
+        favoriteBiases.splice(idx, 1);
+        showToast(`Removed ${memberName} from pinned biases`, "info");
+      } else {
+        favoriteBiases.push(memberName);
+        showToast(`Pinned ${memberName} as a Bias!`);
+      }
+      localStorage.setItem(FAVORITE_BIASES_KEY, JSON.stringify(favoriteBiases));
+      renderApp();
+    }
+
+    function selectBiasTab(biasKey) {
+      currentFilterBias = biasKey;
+      if (biasKey !== 'all' && currentFilterGroup === 'trades') {
+        currentFilterGroup = 'all';
+      }
+      renderApp();
+    }
+
     function selectGroupTab(tabKey) {
       currentFilterGroup = tabKey;
       renderApp();
@@ -1136,7 +1181,21 @@
       document.getElementById('menuCopyShareLinkBtn').addEventListener('click', copyPublicShareLink);
 
       document.getElementById('logoHomeBtn').addEventListener('click', () => {
+        currentFilterBias = 'all';
         selectGroupTab(favoriteGroup || 'all');
+      });
+
+      document.getElementById('biasTabsBar').addEventListener('click', (e) => {
+        const pinBtn = e.target.closest('[data-pin-bias]');
+        if (pinBtn) {
+          e.stopPropagation();
+          toggleFavoriteBias(pinBtn.getAttribute('data-pin-bias'));
+          return;
+        }
+        const biasBtn = e.target.closest('[data-select-bias]');
+        if (biasBtn) {
+          selectBiasTab(biasBtn.getAttribute('data-select-bias'));
+        }
       });
 
       document.getElementById('toggleFavoriteGroupBtn').addEventListener('click', () => {
@@ -1603,6 +1662,9 @@
         if (prefill && prefill.album) {
           document.getElementById('inputAlbum').value = prefill.album;
         }
+        if (currentFilterBias !== 'all') {
+          document.getElementById('inputMember').value = currentFilterBias;
+        }
       }
 
       syncTradeFieldsVisibility();
@@ -1740,9 +1802,81 @@
 
     function renderApp() {
       renderGroupTabsBar();
+      renderBiasTabsBar();
       renderPageHeader();
       renderStats();
       renderCards();
+    }
+
+    function renderBiasTabsBar() {
+      const container = document.getElementById('biasTabsBar');
+      const section = document.getElementById('biasTabsSection');
+      if (!container || !section) return;
+
+      // Scope available bias chips to the currently selected group (or all groups if on 'all' / 'trades')
+      const groupScopedCards = (currentFilterGroup !== 'all' && currentFilterGroup !== 'trades')
+        ? cards.filter(c => (c.group || '').toLowerCase() === currentFilterGroup.toLowerCase())
+        : cards;
+
+      const biases = Array.from(new Set(groupScopedCards.map(c => (c.member || '').trim()).filter(Boolean))).sort((a, b) => {
+        const aFav = favoriteBiases.some(f => f.toLowerCase() === a.toLowerCase());
+        const bFav = favoriteBiases.some(f => f.toLowerCase() === b.toLowerCase());
+        if (aFav && !bFav) return -1;
+        if (!aFav && bFav) return 1;
+        // Also respect age rank if within a single group
+        if (currentFilterGroup !== 'all' && currentFilterGroup !== 'trades') {
+          const rankA = getMemberAgeRank(currentFilterGroup, a);
+          const rankB = getMemberAgeRank(currentFilterGroup, b);
+          if (rankA !== rankB) return rankA - rankB;
+        }
+        return a.localeCompare(b);
+      });
+
+      if (biases.length === 0) {
+        section.classList.add('hidden');
+        return;
+      }
+      section.classList.remove('hidden');
+
+      // If the active bias isn't in the newly selected group, reset bias filter to 'all'
+      if (currentFilterBias !== 'all' && !biases.some(b => b.toLowerCase() === currentFilterBias.toLowerCase())) {
+        currentFilterBias = 'all';
+      }
+
+      const isAllBiasActive = currentFilterBias === 'all';
+      const labelText = currentFilterGroup !== 'all' && currentFilterGroup !== 'trades'
+        ? `${currentFilterGroup} Bias:`
+        : 'All Biases:';
+
+      let html = `
+        <span class="text-[11px] font-bold uppercase tracking-wider text-brand-700 dark:text-brand-300 mr-1 flex items-center gap-1 whitespace-nowrap">
+          <i class="ph-fill ph-heart text-brand-500"></i> ${escapeHtml(labelText)}
+        </span>
+        <button type="button" data-select-bias="all" class="flex items-center gap-1 px-3 py-1 rounded-xl transition whitespace-nowrap ${isAllBiasActive ? 'bg-brand-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700'}">
+          <span>All Members</span>
+          <span class="opacity-80 text-[10px]">(${groupScopedCards.length})</span>
+        </button>
+      `;
+
+      biases.forEach(bias => {
+        const count = groupScopedCards.filter(c => (c.member || '').trim().toLowerCase() === bias.toLowerCase()).length;
+        const isSelected = currentFilterBias.toLowerCase() === bias.toLowerCase();
+        const isPinned = favoriteBiases.some(f => f.toLowerCase() === bias.toLowerCase());
+
+        html += `
+          <div class="inline-flex items-center rounded-xl transition whitespace-nowrap ${isSelected ? 'bg-pink-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-pink-50 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700'}">
+            <button type="button" data-select-bias="${escapeAttr(bias)}" class="flex items-center gap-1 pl-2.5 pr-1 py-1">
+              <span>${escapeHtml(bias)}</span>
+              <span class="opacity-80 text-[10px] font-normal">(${count})</span>
+            </button>
+            <button type="button" data-pin-bias="${escapeAttr(bias)}" class="pr-2 pl-0.5 py-1 hover:scale-110 transition-transform" title="${isPinned ? 'Unpin Bias' : 'Pin Bias to front'}">
+              <i class="${isPinned ? 'ph-fill ph-heart text-rose-400' : 'ph-bold ph-heart opacity-50 hover:opacity-100'} text-[11px]"></i>
+            </button>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
     }
 
     function renderGroupTabsBar() {
@@ -1831,16 +1965,28 @@
       tradeGroupBar.classList.add('hidden');
 
       if (currentFilterGroup === 'all') {
-        titleEl.textContent = 'All Groups Overview';
-        subtitleEl.textContent = 'Complete photocard collection across every artist and era';
-        iconEl.className = 'ph-bold ph-folders';
-        iconBox.className = 'w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60 flex items-center justify-center text-xl flex-shrink-0';
+        if (currentFilterBias !== 'all') {
+          titleEl.textContent = `${currentFilterBias} — Bias Collection`;
+          subtitleEl.textContent = `Showing all ${currentFilterBias} photocards, owned count, and wishlist progress across groups`;
+          iconEl.className = 'ph-fill ph-heart';
+          iconBox.className = 'w-11 h-11 rounded-xl bg-pink-50 dark:bg-pink-950/50 text-pink-600 dark:text-pink-400 border border-pink-200/60 dark:border-pink-800/60 flex items-center justify-center text-xl flex-shrink-0';
+        } else {
+          titleEl.textContent = 'All Groups Overview';
+          subtitleEl.textContent = 'Complete photocard collection across every artist and era';
+          iconEl.className = 'ph-bold ph-folders';
+          iconBox.className = 'w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60 flex items-center justify-center text-xl flex-shrink-0';
+        }
         favBadge.classList.add('hidden');
         favBtn.classList.add('hidden');
       } else {
         const isFav = favoriteGroup && favoriteGroup.toLowerCase() === currentFilterGroup.toLowerCase();
-        titleEl.textContent = currentFilterGroup;
-        subtitleEl.textContent = `Album eras, owned cards, and wishlist progress for ${currentFilterGroup}`;
+        if (currentFilterBias !== 'all') {
+          titleEl.textContent = `${currentFilterGroup} — ${currentFilterBias}`;
+          subtitleEl.textContent = `Showing ${currentFilterBias} album eras, owned cards, and wishlist progress in ${currentFilterGroup}`;
+        } else {
+          titleEl.textContent = currentFilterGroup;
+          subtitleEl.textContent = `Album eras, owned cards, and wishlist progress for ${currentFilterGroup}`;
+        }
         iconEl.className = 'ph-bold ph-sparkle';
         iconBox.className = 'w-11 h-11 rounded-xl bg-brand-50 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 border border-brand-200/60 dark:border-brand-800/60 flex items-center justify-center text-xl flex-shrink-0';
 
@@ -1884,11 +2030,16 @@
     }
 
     function getScopedGroupCards() {
+      let base = cards;
       if (currentFilterGroup === 'trades') {
-        return cards.filter(c => Number(c.duplicateCount || 0) > 0);
+        base = base.filter(c => Number(c.duplicateCount || 0) > 0);
+      } else if (currentFilterGroup !== 'all') {
+        base = base.filter(c => (c.group || '').toLowerCase() === currentFilterGroup.toLowerCase());
       }
-      if (currentFilterGroup === 'all') return cards;
-      return cards.filter(c => (c.group || '').toLowerCase() === currentFilterGroup.toLowerCase());
+      if (currentFilterBias !== 'all') {
+        base = base.filter(c => (c.member || '').trim().toLowerCase() === currentFilterBias.toLowerCase());
+      }
+      return base;
     }
 
     function renderStats() {
